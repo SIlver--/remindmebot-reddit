@@ -86,7 +86,6 @@ def parse_comment(comment):
 		message_input = '"Hello, I\'m here to remind you to see the parent comment!"'
 
 
-
 		#check for hours
 		#regex: 4.0 or 4 "hour | hours" ONLY
 		time_hour = re.search("(?:\d+)?\.*(?:\d+ [hH][oO][uU][rR]([sS]|))", comment.body)
@@ -94,10 +93,6 @@ def parse_comment(comment):
 			#regex: ignores ".0" and non numbers
 			time_hour = re.search("\d*", time_hour.group(0))
 			time_hour_int = int(time_hour.group(0))
-			#no longer than a 24 hour day
-			if time_hour_int >= 24:
-				time_hour_int = 24
-
 
 
 		#check for days
@@ -106,15 +101,14 @@ def parse_comment(comment):
 		if time_day:
 			time_day = re.search("\d*", time_day.group(0))
 			time_day_int = int(time_day.group(0))
-			#no longer than a seven day week
-			if time_day_int >= 7.0:
-				time_day_int = 7
-				time_hour_int = 0
 		#cases where the user inputs hours but not days
 		elif not time_day and time_hour_int > 0 :
 			time_day_int = 0
 
-
+		#no longer than 365 days
+		hours_and_days = (time_day_int * 24) + time_hour_int
+		if hours_and_days >= 8760:
+			hours_and_days = 8760
 
 		#check for comments
 		#regex: Only text around quotes, avoids long messages
@@ -123,10 +117,10 @@ def parse_comment(comment):
 			message_input = message_user.group(0)
 
 
-		save_to_db(comment, time_day_int, time_hour_int, message_input)
+		save_to_db(comment, hours_and_days, message_input)
 
 		
-def save_to_db(comment, day, hour, message):
+def save_to_db(comment, hours, message):
 	"""
 	Saves the permalink comment, the time, and the message to the database
 	"""
