@@ -150,7 +150,7 @@ def reply_to_original(comment, reply_date, message):
 	Messages the user letting them know when they will be messaged a second time
 	"""
 	try:
-		comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I send you a message if you ask so you don't forget about the parent comment or thread later on!)[^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)" 
+		comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)" 
 		comment.reply(comment_to_user.format(reply_date, message))
 		commented.append(comment)
 	except (HTTPError, ConnectionError, Timeout, timeout) as e:
@@ -183,14 +183,16 @@ def time_to_reply():
 	#flag states: 0 is different error, 
 	#1 means comment was succesful, 
 	#2 means comment was deleted
-
+	already_commented = []
 	for row in data:
-		flag = 0
-		flag = new_reply(row[0],row[1])
-		#removes row based on flag
-		if flag == 1 or flag == 2:
-			query_db.execute("DELETE FROM '%s' WHERE permalink = '%s'" %(table, row[0]))
-
+		#checks to make sure permalink hasn't been commented already
+		if row[0] not in already_commented:
+			flag = 0
+			flag = new_reply(row[0],row[1])
+			#removes row based on flag
+			if flag == 1 or flag == 2:
+				query_db.execute("DELETE FROM '%s' WHERE permalink = '%s'" %(table, row[0]))
+			already_commented.append(row[0])
 	query_db.commit()
 	query_db.close()
 	
@@ -200,10 +202,11 @@ def new_reply(permalink, message):
 	Replies a second time to the user after a set amount of time
 	"""
 	try:
-		comment_to_user = "RemindMeBot here!\n\n**{0}**\n\n_____\n ^(Hello, I'm RemindMeBot, I send you a message if you ask so you don't forget about the parent comment or thread later on!)[^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
+		comment_to_user = "RemindMeBot here!\n\n**{0}**\n\n {1} \n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
 		s = reddit.get_submission(permalink)
 		comment = s.comments[0]
-		comment.reply(comment_to_user.format(message))
+		author = comment.author
+		reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(message, permalink))
 		return 1
 	except APIException as e:
 		print e
