@@ -20,7 +20,7 @@
 """
 import praw
 import re
-import sqlite3
+import MySQLdb
 import ConfigParser
 import time
 from datetime import datetime, timedelta
@@ -43,9 +43,11 @@ reddit_pass = config.get("Reddit", "password")
 reddit.login(reddit_user, reddit_pass)
 
 #Database info, SQLite used
+host = config.get("SQL", "host")
+user = config.get("SQL", "user")
+passwd = config.get("SQL", "passwd")
 db = config.get("SQL", "db")
 table = config.get("SQL", "table")
-
 
 #commented already messaged are appended to avoid messaging again
 commented = []
@@ -59,7 +61,7 @@ class Connect:
 	cursor = None
 
 	def __init__(self):
-		self.connection = sqlite3.connect(db)
+		self.connection = MySQLdb.connect(host= host, user = user, passwd= passwd, db= db)
 		self.cursor = self.connection.cursor()
 
 	def execute(self, command):
@@ -135,7 +137,7 @@ def save_to_db(comment, hours, message):
 	#9999/12/31 HH/MM/SS
 	reply_date = format(reply_date, '%Y-%m-%d %H:%M:%S')
 
-	save_to_db.execute("INSERT INTO '%s' VALUES ('%s', %s, '%s')" %(table, comment.permalink , message , reply_date))
+	save_to_db.execute("INSERT INTO %s VALUES ('%s', %s, '%s')" %(table, comment, message , reply_date))
 	save_to_db.commit()
 	save_to_db.close()
 	reply_to_original(comment, reply_date, message)
@@ -149,79 +151,22 @@ def reply_to_original(comment, reply_date, message):
 		comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)" 
 		comment.reply(comment_to_user.format(reply_date, message))
 		commented.append(comment)
-	except (HTTPError, ConnectionError, Timeout, timeout) as e:
+	except (HTTPError, ConnectionError, Timeout, timeout), e:
 		#PM instead if the banned from the subreddit
 		if str(e) == "403 Client Error: Forbidden":
 			comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)" 
 			author = comment.author
 			reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(reply_date, message))
 			commented.append(comment)
-	except APIException as e:
 		print e
-	except RateLimitExceeded as e:
+	except APIException, e:
 		print e
-		time.sleep(10)
-		
-		
-def time_to_reply():
-	"""
-	Checks to see through SQL if new_date is < current time
-	Once done will send a message to the user
-	"""
-	#connection to DB
-	query_db = Connect()
-	
-	#get current time to compare
-	current_time = datetime.now(timezone('UTC'))
-	current_time = format(current_time, '%Y-%m-%d %H:%M:%S')
-	query_db.execute("SELECT * FROM '%s' WHERE new_date < '%s'" %(table, current_time))
-
-	data = query_db.fetchall()
-	#row[0] is the permalink to reply to
-	#flag states: 0 is different error, 
-	#1 means comment was succesful, 
-	#2 means comment was deleted
-	already_commented = []
-	for row in data:
-		#checks to make sure permalink hasn't been commented already
-		if row[0] not in already_commented:
-			flag = 0
-			flag = new_reply(row[0],row[1])
-			#removes row based on flag
-			if flag == 1 or flag == 2:
-				query_db.execute("DELETE FROM '%s' WHERE permalink = '%s'" %(table, row[0]))
-				query_db.commit()
-			already_commented.append(row[0])
-	
-	query_db.commit()
-	query_db.close()
-	
-
-def new_reply(permalink, message):
-	"""
-	Replies a second time to the user after a set amount of time
-	"""
-	try:
-		comment_to_user = "RemindMeBot here!\n\n**{0}**\n\n {1} \n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
-		s = reddit.get_submission(permalink)
-		comment = s.comments[0]
-		author = comment.author
-		reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(message, permalink))
-		return 1
-	except APIException as e:
-		print e
-		if str(e) == "(DELETED_COMMENT) `that comment has been deleted` on field `parent`":
-			return 2
-	except IndexError:
-		print e
-		return 2
-	except (HTTPError, ConnectionError, Timeout, timeout) as e:
-		print e
-	except RateLimitExceeded as e:
+	except RateLimitExceeded, e:
 		print e
 		time.sleep(10)
 		
 		
+
 def main():
 	while True:
 		try:
@@ -229,7 +174,6 @@ def main():
 			for comment in reddit.get_comments("all", limit=None):
 				if "RemindMe!" in comment.body:
 					parse_comment(comment)
-			time_to_reply()
 		except Exception, e:
 			print e
 
