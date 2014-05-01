@@ -24,7 +24,9 @@ import sqlite3
 import ConfigParser
 import time
 from datetime import datetime, timedelta
+from requests.exceptions import HTTPError, ConnectionError, Timeout
 from praw.errors import ExceptionList, APIException, InvalidCaptcha, InvalidUser, RateLimitExceeded
+from socket import timeout
 from pytz import timezone
 
 #Reads the config file
@@ -129,7 +131,7 @@ def save_to_db(comment, hours, message):
 
 	
 	#setting up time and adding
-	reply_date = datetime.now(timezone('UTC')) + timedelta(days=day) + timedelta(hours=hour)
+	reply_date = datetime.now(timezone('UTC')) + timedelta(hours=hours)
 	#9999/12/31 HH/MM/SS
 	reply_date = format(reply_date, '%Y-%m-%d %H:%M:%S')
 
@@ -148,15 +150,17 @@ def reply_to_original(comment, reply_date, message):
 		comment.reply(comment_to_user.format(reply_date, message))
 		commented.append(comment)
 	except (HTTPError, ConnectionError, Timeout, timeout) as e:
-		print e
-		pass
+		#PM instead if the banned from the subreddit
+		if str(e) == "403 Client Error: Forbidden":
+			comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)" 
+			author = comment.author
+			reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(reply_date, message))
+			commented.append(comment)
 	except APIException as e:
 		print e
-		pass
 	except RateLimitExceeded as e:
 		print e
 		time.sleep(10)
-		pass
 		
 		
 def time_to_reply():
@@ -186,7 +190,9 @@ def time_to_reply():
 			#removes row based on flag
 			if flag == 1 or flag == 2:
 				query_db.execute("DELETE FROM '%s' WHERE permalink = '%s'" %(table, row[0]))
+				query_db.commit()
 			already_commented.append(row[0])
+	
 	query_db.commit()
 	query_db.close()
 	
@@ -211,26 +217,21 @@ def new_reply(permalink, message):
 		return 2
 	except (HTTPError, ConnectionError, Timeout, timeout) as e:
 		print e
-		pass
 	except RateLimitExceeded as e:
 		print e
 		time.sleep(10)
-		pass
 		
 		
 def main():
 	while True:
 		try:
-			print "Start loop"
 			#looks to be called for
 			for comment in reddit.get_comments("all", limit=None):
 				if "RemindMe!" in comment.body:
 					parse_comment(comment)
-			print "End Loop"
 			time_to_reply()
 		except Exception, e:
 			print e
-			pass
 
 
 
