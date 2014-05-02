@@ -148,13 +148,13 @@ def reply_to_original(comment, reply_date, message):
 	Messages the user letting them know when they will be messaged a second time
 	"""
 	try:
-		comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(**NOTE: Only days and hours work for now.**)" 
+		comment_to_user = "I'll message you on **{0} UTC** to remind you of this post.\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(**NOTE: Only days and hours work for now. Max wait is one year.**)" 
 		comment.reply(comment_to_user.format(reply_date, message))
 		commented.append(comment)
 	except (HTTPError, ConnectionError, Timeout, timeout), e:
 		#PM instead if the banned from the subreddit
 		if str(e) == "403 Client Error: Forbidden":
-			comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(**NOTE: Only days and hours work for now.**)" 
+			comment_to_user = "I'll message you on **{0} UTC** to remind you of this post.\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(**NOTE: Only days and hours work for now. Max wait is one year.**)" 
 			author = comment.author
 			reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(reply_date, message))
 			commented.append(comment)
