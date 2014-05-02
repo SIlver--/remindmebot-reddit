@@ -137,7 +137,7 @@ def save_to_db(comment, hours, message):
 	#9999/12/31 HH/MM/SS
 	reply_date = format(reply_date, '%Y-%m-%d %H:%M:%S')
 
-	save_to_db.execute("INSERT INTO %s VALUES ('%s', %s, '%s')" %(table, comment, message , reply_date))
+	save_to_db.execute("INSERT INTO %s VALUES ('%s', %s, '%s')" %(table, comment.permalink, message , reply_date))
 	save_to_db.commit()
 	save_to_db.close()
 	reply_to_original(comment, reply_date, message)
@@ -148,13 +148,13 @@ def reply_to_original(comment, reply_date, message):
 	Messages the user letting them know when they will be messaged a second time
 	"""
 	try:
-		comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)" 
+		comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(**NOTE: Only days and hours work for now.**)" 
 		comment.reply(comment_to_user.format(reply_date, message))
 		commented.append(comment)
 	except (HTTPError, ConnectionError, Timeout, timeout), e:
 		#PM instead if the banned from the subreddit
 		if str(e) == "403 Client Error: Forbidden":
-			comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)" 
+			comment_to_user = "I'll message you on **{0} UTC** to remind you of this post with the message\n\n**{1}**\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(**NOTE: Only days and hours work for now.**)" 
 			author = comment.author
 			reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(reply_date, message))
 			commented.append(comment)
@@ -168,16 +168,23 @@ def reply_to_original(comment, reply_date, message):
 		
 
 def main():
+	#continuous loop
 	while True:
 		try:
-			#looks to be called for
-			for comment in reddit.get_comments("all", limit=None):
+			#grab all the new comments from /r/all
+			comments = praw.helpers.comment_stream(reddit, 'all', limit=None, verbosity=0)
+			comment_count = 0
+			#loop through each comment
+			for comment in comments:
+				comment_count += 1
 				if "RemindMe!" in comment.body:
 					parse_comment(comment)
+				#end loop after 1000
+				if comment_count == 1000:
+					break
+			time.sleep(25)
 		except Exception, e:
-			print e
-
-
+			print e     
 
 main()
 

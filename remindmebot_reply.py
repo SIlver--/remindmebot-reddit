@@ -110,7 +110,7 @@ def new_reply(permalink, message):
 	Replies a second time to the user after a set amount of time
 	"""
 	try:
-		comment_to_user = "RemindMeBot here!\n\n**{0}**\n\n {1} \n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
+		comment_to_user = "RemindMeBot here!\n\n**{0}**\n\n {1} \n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(**NOTE: Only days and hours work for now.**)"
 		s = reddit.get_submission(permalink)
 		comment = s.comments[0]
 		author = comment.author
@@ -120,6 +120,7 @@ def new_reply(permalink, message):
 		print e
 		if str(e) == "(DELETED_COMMENT) `that comment has been deleted` on field `parent`":
 			return 2
+		return 2
 	except IndexError, e:
 		print e
 		return 2
