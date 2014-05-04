@@ -95,7 +95,8 @@ def time_to_reply():
 		#checks to make sure permalink hasn't been commented already
 		if row[0] not in already_commented:
 			flag = 0
-			flag = new_reply(row[0],row[1])
+			#MySQL-permalink,message, reddit user
+			flag = new_reply(row[0],row[1], row[3])
 			#removes row based on flag
 			if flag == 1 or flag == 2:
 				query_db.execute("DELETE FROM %s WHERE permalink = '%s'" %(table, row[0]))
@@ -105,15 +106,13 @@ def time_to_reply():
 	query_db.commit()
 	query_db.close()
 
-def new_reply(permalink, message):
+def new_reply(permalink, message, author):
 	"""
 	Replies a second time to the user after a set amount of time
 	"""
 	try:
 		comment_to_user = "RemindMeBot here!\n\n**{0}**\n\n {1} \n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(NOTE: Only days and hours. Max wait is one year. Default is a day.)"
 		s = reddit.get_submission(permalink)
-		comment = s.comments[0]
-		author = comment.author
 		reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(message, permalink))
 		return 1
 	except APIException, e:

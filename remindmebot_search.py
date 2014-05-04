@@ -137,7 +137,7 @@ def save_to_db(comment, hours, message):
 	#9999/12/31 HH/MM/SS
 	reply_date = format(reply_date, '%Y-%m-%d %H:%M:%S')
 
-	save_to_db.execute("INSERT INTO %s VALUES ('%s', %s, '%s')" %(table, comment.permalink, message , reply_date))
+	save_to_db.execute("INSERT INTO %s VALUES ('%s', %s, '%s', '%s')" %(table, comment.permalink, message , reply_date, comment.author))
 	save_to_db.commit()
 	save_to_db.close()
 	reply_to_original(comment, reply_date, message)
