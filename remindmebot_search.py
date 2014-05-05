@@ -182,7 +182,7 @@ def main():
 				#end loop after 1000
 				if comment_count == 1000:
 					break
-			time.sleep(20)
+			time.sleep(25)
 		except Exception, e:
 			print e     
 
