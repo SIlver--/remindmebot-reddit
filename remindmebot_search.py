@@ -1,8 +1,9 @@
-#! /usr/bin/python -O
-"""
-Sends a message to the Reddit user after a specified amount of time
+#!/usr/bin/env python2.7
 
-"""
+# =============================================================================
+# IMPORTS
+# =============================================================================
+
 import praw
 import re
 import MySQLdb
@@ -14,168 +15,82 @@ from praw.errors import ExceptionList, APIException, InvalidCaptcha, InvalidUser
 from socket import timeout
 from pytz import timezone
 
-#Reads the config file
-config = ConfigParser.ConfigParser()
-config.read("remindmebot.cfg")
-
-user_agent = ("RemindMeBot v1.0 by /u/RemindMeBotWrangler")
-reddit = praw.Reddit(user_agent = user_agent)
+# =============================================================================
+# GLOBALS
+# =============================================================================
 
 #Reddit info
-reddit_user = config.get("Reddit", "username")
-reddit_pass = config.get("Reddit", "password")
+USER = config.get("Reddit", "username")
+PASS = config.get("Reddit", "password")
+DB_USER = config.get("SQL", "user")
+DB_PASS = config.get("SQL", "passwd")
 
+# =============================================================================
+# CLASSES
+# =============================================================================
 
+class Connect(object):
+    """
+	DB connection class
+	"""
+    connection = None
+    cursor = None
 
-#Database info, SQLite used
-host = config.get("SQL", "host")
-user = config.get("SQL", "user")
-passwd = config.get("SQL", "passwd")
-db = config.get("SQL", "db")
-table = config.get("SQL", "table")
+    def __init__(self):
+        self.connection = MySQLdb.connect(
+            host="localhost", user=DB_USER, passwd=DB_PASS, db="bot"
+        )
+        self.cursor = self.connection.cursor()
 
-#commented already messaged are appended to avoid messaging again
-commented = []
-sub_id = []
+    def execute(self, command):
+        self.cursor.execute(command)
 
-def main():
-	class Connect:
+    def fetchall(self):
+        return self.cursor.fetchall()
+
+    def commit(self):
+        self.connection.commit()
+
+    def close(self):
+        self.connection.close()
+
+class Search(object):
+	commented = [] # comments already replied to
+	subId = [] # reddit threads already replied in
+
+	def __init__(self, comment):
+		self.comment = comment # Reddit comment Object
+		# Defaults
+		self._timeDayInt = 1
+		self._timeHourInt = 0
+		self._messageInput = '"Hello, I\'m here to remind you to see the parent comment!"'
+
+	def parse_comment(self):
 		"""
-		DB connection class
+		Parse comment looking for the message and time
 		"""
-		connection = None
-		cursor = None
 
-		def __init__(self):
-			self.connection = MySQLdb.connect(host= host, user = user, passwd= passwd, db= db)
-			self.cursor = self.connection.cursor()
+		# check for hours
+		# regex: 4.0 or 4 "hour | hours" ONLY
+		timeHourTemp = re.search("(?:\d+)?\.*(?:\d+ [hH][oO][uU][rR]([sS]|))", self.comment.body)
 
-		def execute(self, command):
-			self.cursor.execute(command)
+		if timeHourTemp:
+			# regex: ignores ".0" and non numbers
+			timeHourTemp = re.search("\d*", timeHourTemp.group(0))
+			self._timeDayInt = int(timeHourTemp.group(0))
 
-		def fetchall(self):
-			return self.cursor.fetchall()
+		# check for days
+		# regex 4.0 or 4 "day | days" ONLY
+		timeDayTemp = re.search("(?:\d+)?\.*(?:\d+ [dD][aA][yY]([sS]|))", self.comment.body)
+		if timeDayTemp:
+			timeDayTemp = re.search("\d*", timeDayTemp.group(0))
+			self._timeDayInt = int(timeDayTemp.group(0))
+		# cases where the user inputs hours but not days
+		elif not timeDayTemp and timeHourTemp > 0:
+			self._timeDayInt = 0
 
-		def commit(self):
-			self.connection.commit()
-
-		def close(self):
-			self.connection.close()
-
-
-	def parse_comment(comment):
-		"""
-		Parses through the comment looking for the message and time
-		Calls save_to_db() to save the values
-		"""
-		if (comment not in commented):
-			commented.append(comment)
-			#defaults
-			time_day_int = 1
-			time_hour_int = 0
-			message_input = '"Hello, I\'m here to remind you to see the parent comment!"'
-
-
-			#check for hours
-			#regex: 4.0 or 4 "hour | hours" ONLY
-			time_hour = re.search("(?:\d+)?\.*(?:\d+ [hH][oO][uU][rR]([sS]|))", comment.body)
-			if time_hour:
-				#regex: ignores ".0" and non numbers
-				time_hour = re.search("\d*", time_hour.group(0))
-				time_hour_int = int(time_hour.group(0))
-
-
-			#check for days
-			#regex: 4.0 or 4 "day | days" ONLY
-			time_day = re.search("(?:\d+)?\.*(?:\d+ [dD][aA][yY]([sS]|))", comment.body)
-			if time_day:
-				time_day = re.search("\d*", time_day.group(0))
-				time_day_int = int(time_day.group(0))
-			#cases where the user inputs hours but not days
-			elif not time_day and time_hour_int > 0 :
-				time_day_int = 0
-
-			#no longer than 365 days
-			hours_and_days = (time_day_int * 24) + time_hour_int
-			if hours_and_days >= 8760:
-				hours_and_days = 8760
-
-			#check for comments
-			#regex: Only text around quotes, avoids long messages
-			message_user = re.search('(["].{0,10000}["])', comment.body)
-			if message_user:
-				message_input = message_user.group(0)
-
-
-			save_to_db(comment, hours_and_days, message_input)
-
-
-	def save_to_db(comment, hours, message):
-		"""
-		Saves the permalink comment, the time, and the message to the database
-		"""
-		#connect to DB
-		save_to_db = Connect()
-
-
-		#setting up time and adding
-		reply_date = datetime.now(timezone('UTC')) + timedelta(hours=hours)
-		#9999/12/31 HH/MM/SS
-		reply_date = format(reply_date, '%Y-%m-%d %H:%M:%S')
-
-		save_to_db.execute("INSERT INTO %s VALUES ('%s', %s, '%s', '%s')" %(table, comment.permalink, message , reply_date, comment.author))
-		save_to_db.commit()
-		save_to_db.close()
-		reply_to_original(comment, reply_date, message)
-
-
-	def reply_to_original(comment, reply_date, message):
-		"""
-		Messages the user letting them know when they will be messaged a second time
-		"""
-		sub = reddit.get_submission(comment.permalink)
-		author = comment.author
-		comment_to_user = "I'll message you on {0} UTC to remind you of this post.\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(NOTE: Only days and hours. Max wait is one year. Default is a day. **Only first confirmation in the unique thread is shown.**)" 
-		try:			
-			if (sub.id not in sub_id):
-				comment.reply(comment_to_user.format(reply_date, message))
-			else:
-				reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(reply_date, message))
-			commented.append(comment)
-			sub_id.append(sub.id)
-		except (HTTPError, ConnectionError, Timeout, timeout) as err:
-			print err
-			#PM instead if the banned from the subreddit
-			if str(e) == "403 Client Error: Forbidden":
-				reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(reply_date, message))
-				commented.append(comment)
-				sub_id.append(sub.id)
-		except RateLimitExceeded as err:
-			print err
-			reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(reply_date, message))
-			commented.append(comment)
-			comment_id.append(comment.id)
-			time.sleep(10)
-		except APIException as err: # Catch any less specific API errors
-			print err
-
-
-	#continuous loop
-	while True:
-		try:
-			reddit.login(reddit_user, reddit_pass)
-			#grab all the new comments from /r/all
-			comments = praw.helpers.comment_stream(reddit, 'all', limit=1000, verbosity=0)
-			#loop through each comment
-			for comment in comments:
-				if "RemindMe!" in comment.body:
-					print "in"
-					parse_comment(comment)
-		except Exception, e:
-			print e
-
-
-print "start"
-main()
-
-
+		# check for user message
+		# regex: Only text around quotes, avoids long messages
+		messageInputTemp = re.search('(["].{0,10000}["])', self.comment.body)
+		if messageInputTemp:
+			self._messageInput = messageInputTemp.group(0)
