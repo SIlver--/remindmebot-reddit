@@ -97,15 +97,7 @@ def new_reply(permalink, message, author):
 	"""
 	try:
 		comment_to_user = "RemindMeBot here!\n\n**{0}**\n\n {1} \n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message so you don't forget about the comment or thread later on!) [^(More Info Here)](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)\n\n^(NOTE: Only days and hours. Max wait is one year. Default is a day.)"
-		s = reddit.get_submission(permalink)
-		comment = s.comments[0]
-		#due to legacy, will not PM comment.author if it's none
-		if comment.author == "None":
-			reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(message, permalink))
-		else:
-			reddit.send_message(comment.author, 'RemindMeBot Reminder!', comment_to_user.format(message, permalink))
-			
-
+		reddit.send_message(author, 'RemindMeBot Reminder!', comment_to_user.format(message, permalink))
 		return 1
 	except APIException, e:
 		print e
