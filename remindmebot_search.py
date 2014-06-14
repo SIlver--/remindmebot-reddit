@@ -19,9 +19,16 @@ from pytz import timezone
 # GLOBALS
 # =============================================================================
 
+# Reads the config file
+config = ConfigParser.ConfigParser()
+config.read("remindmebot.cfg")
+
 #Reddit info
+user_agent = ("RemindMeBot v2.0 by /u/RemindMeBotWrangler")
+reddit = praw.Reddit(user_agent = user_agent)
 USER = config.get("Reddit", "username")
 PASS = config.get("Reddit", "password")
+
 DB_USER = config.get("SQL", "user")
 DB_PASS = config.get("SQL", "passwd")
 DB_TABLE = config.get("SQL", "table")
@@ -174,5 +181,35 @@ class Search(object):
 		except APIException as err: # Catch any less specific API errors
 			print err
 		else:
-			self.commented.append(self.comment)
+			# only message the thread once
 			self.subId.append(sub.id)
+# =============================================================================
+# MAIN
+# =============================================================================
+
+def main():
+	while True:
+		try:
+			reddit.login(USER, PASS)
+			# Grab all the new comments from /r/all
+			comments = praw.helpers.comment_stream(reddit, 'all', limit=1000, verbosity=0)
+
+			# loop through each comment
+			for comment in comments:
+				redditCall = Search(comment)
+				if "RemindMe!" in comment.body and 
+					redditCall.comment.id not in redditCall.commented:
+						print "in"
+						redditCall.parse_comment()
+						redditCall.save_to_db()
+						redditCall.build_message()
+						redditCall.reply()
+
+		except Exception err:
+			print err
+# =============================================================================
+# RUNNER
+# =============================================================================
+
+if __name__ == '__main__':
+    main()
