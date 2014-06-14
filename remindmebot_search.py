@@ -118,10 +118,9 @@ class Search(object):
         addToDB = Connect()
 
         # Converting time
-        self._replyDate = datetime.now(timezone('UTC')) + timedelta(hours=self.hours)
+        self._replyDate = datetime.now(timezone('UTC')) + timedelta(hours=self._totalTime)
         #9999/12/31 HH/MM/SS
         self._replyDate = format(self._replyDate, '%Y-%m-%d %H:%M:%S')
-
         addToDB.execute("INSERT INTO %s VALUES ('%s', %s, '%s', '%s')" %(
                         DB_TABLE, 
                         self.comment.permalink, 
@@ -137,45 +136,46 @@ class Search(object):
         """
         Buildng message for user
         """
-        self._replyMessage = "I'll message you on {0} UTC to remind you of this post."
-                            "\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message"
-                            " so you don't forget about the comment or thread later on!) "
-                            "[^(More Info Here)]"
-                            "(http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
-                            "\n\n^(NOTE: Only days and hours. Max wait is one year. Default is a day."
-                            " **Only first confirmation in the unique thread is shown.**)"
+        self._replyMessage =(
+            "I'll message you on {0} UTC to remind you of this post."
+            "\n\n_____\n ^(Hello, I'm RemindMeBot, I will PM you a message"
+            " so you don't forget about the comment or thread later on!) "
+            "[^(More Info Here)]"
+            "(http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
+            "\n\n^(NOTE: Only days and hours. Max wait is one year. Default is a day."
+            " **Only first confirmation in the unique thread is shown.**)"
+        )
 
 
     def reply(self):
         """
         Messages the user letting as a confirmation
         """
-        sub = reddit.get_submission(comment.permalink)
-        author = comment.author
-        """
+        sub = reddit.get_submission(self.comment.permalink)
+        author = self.comment.author
         try:
             # First message will be a reply in a thread
             # afterwards are PM in the same thread
             if (sub.id not in self.subId):
                 self.comment.reply(self._replyMessage.format(
-                                    self.__replyDate, 
+                                    self._replyDate, 
                                     self._replyMessage))
             else:
                 reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage.format(
-                                    self.__replyDate, 
+                                    self._replyDate, 
                                     self._replyMessage))
         except (HTTPError, ConnectionError, Timeout, timeout) as err:
             print err
             # PM instead if the banned from the subreddit
             if str(e) == "403 Client Error: Forbidden":
                 reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage.format(
-                                    self.__replyDate, 
+                                    self._replyDate, 
                                     self._replyMessage))
         except RateLimitExceeded as err:
             print err
             # PM when I message too much
             reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage.format(
-                    self.__replyDate, 
+                    self._replyDate, 
                     self._replyMessage))
             time.sleep(10)
         except APIException as err: # Catch any less specific API errors
@@ -183,10 +183,9 @@ class Search(object):
         else:
             # only message the thread once
             self.subId.append(sub.id)
-        """
         print self._replyMessage.format(
-                        self.__replyDate, 
-                        self._replyMessage))
+                        self._replyDate, 
+                        self._replyMessage)
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -194,6 +193,7 @@ class Search(object):
 def main():
     while True:
         try:
+
             reddit.login(USER, PASS)
             # Grab all the new comments from /r/all
             comments = praw.helpers.comment_stream(reddit, 'all', limit=1000, verbosity=0)
@@ -201,19 +201,20 @@ def main():
             # loop through each comment
             for comment in comments:
                 redditCall = Search(comment)
-                if "RemindMe!" in comment.body and 
-                    redditCall.comment.id not in redditCall.commented:
+                print comment
+                if ("RemindMe!" in comment.body and 
+                    redditCall.comment.id not in redditCall.commented):
                         print "in"
                         redditCall.parse_comment()
                         redditCall.save_to_db()
                         redditCall.build_message()
                         redditCall.reply()
 
-        except Exception err:
-            print err
+        except Exception as err:
+           print err
 # =============================================================================
 # RUNNER
 # =============================================================================
-
+print "start"
 if __name__ == '__main__':
     main()
