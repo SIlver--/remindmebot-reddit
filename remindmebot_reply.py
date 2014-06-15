@@ -67,11 +67,14 @@ class Reply(object):
         self._queryDB = Connect()
         self._replyMessage =(
             "RemindMeBot here!\n\n**{0}**\n\n {1} \n\n_____\n"
-            " ^(Hello, I'm RemindMeBot, I will PM you a message so "
-            "you don't forget about the comment or thread later on!) "
-            "[^(More Info Here)]"
-            "(http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
-            "\n\n^(NOTE: Only days and hours. Max wait is one year. Default is a day.)"
+            "^(I will PM you a message so you don't forget about the comment"
+            " or thread later on. Just use the **RemindMe!** command and optional date formats.)"
+            "\n\n^(Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
+            " Default wait is a day.)\n\n"
+            "[^([More Info Here])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
+            "[^([Date Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
+            "[^([Suggestions])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Suggestion) ^| "
+            "[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
             )
 
     def time_to_reply(self):
@@ -138,9 +141,9 @@ class Reply(object):
 # =============================================================================
 
 def main():
+    reddit.login(USER, PASS)
     while True:
         try:
-            reddit.login(USER, PASS)
             checkReply = Reply()
             checkReply.time_to_reply()
             checkReply.search_db()
