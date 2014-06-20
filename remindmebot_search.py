@@ -15,6 +15,7 @@ from requests.exceptions import HTTPError, ConnectionError, Timeout
 from praw.errors import ExceptionList, APIException, InvalidCaptcha, InvalidUser, RateLimitExceeded
 from socket import timeout
 from pytz import timezone
+from threading import Thread
 
 # =============================================================================
 # GLOBALS
@@ -74,6 +75,12 @@ class Search(object):
         self._replyMessage = ""
         self._replyDate = None
 
+    def run(self):
+        self.parse_comment()
+        self.save_to_db()
+        self.build_message()
+        self.reply()
+
     def parse_comment(self):
         """
         Parse comment looking for the message and time
@@ -126,8 +133,8 @@ class Search(object):
             "I'll message you on [**{0} UTC**](http://www.wolframalpha.com/input/?i={0} UTC To Local Time)"
             " to remind you of this post."
             "\n\n_____\n ^(I will PM you a message so you don't forget about the comment"
-            " or thread later on. Just use the **RemindMe!** command and optional date formats.)"
-            "\n\n^(Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
+            " or thread later on. Just use the **RemindMe!** command and optional date formats. "
+            "Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
             " Default wait is a day.)\n\n"
             "[^([More Info Here])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
             "[^([Date Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
@@ -175,26 +182,19 @@ class Search(object):
 # =============================================================================
 
 def main():
+    reddit.login(USER, PASS)
+    print "start"
     while True:
         try:
-
-            reddit.login(USER, PASS)
-            print "start"
-            # Grab all the new comments from /r/all
-            comments = praw.helpers.comment_stream(reddit, 'all', limit=1000, verbosity=0)
-
             # loop through each comment
-            for comment in comments:
+            for comment in praw.helpers.comment_stream(reddit, 'all', limit=1000, verbosity=0):
                 redditCall = Search(comment)
                 if ("RemindMe!" in comment.body and 
                     redditCall.comment.id not in redditCall.commented and
                     'RemindMeBot' != str(comment.author)):
                         print "in"
-                        redditCall.parse_comment()
-                        redditCall.save_to_db()
-                        redditCall.build_message()
-                        redditCall.reply()
-
+                        t = Thread(target=redditCall.run())
+                        t.start()
         except Exception as err:
            print err
 # =============================================================================
