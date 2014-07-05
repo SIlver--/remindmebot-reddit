@@ -9,6 +9,7 @@ import re
 import MySQLdb
 import ConfigParser
 import time
+import urllib
 import parsedatetime.parsedatetime as pdt
 from datetime import datetime, timedelta
 from requests.exceptions import HTTPError, ConnectionError, Timeout
@@ -74,8 +75,11 @@ class Search(object):
         self._storeTime = 0
         self._replyMessage = ""
         self._replyDate = None
+        self._privateMessage = False
 
-    def run(self):
+    def run(self, privateMessage=False):
+        if privateMessage == True:
+            self._privateMessage = True
         self.parse_comment()
         self.save_to_db()
         self.build_message()
@@ -85,12 +89,25 @@ class Search(object):
         """
         Parse comment looking for the message and time
         """
+
+        if self._privateMessage == True:
+            permalinkTemp = re.search('\[(.*?)\]', self.comment.body)
+            if permalinkTemp:
+                self.comment.permalink = permalinkTemp.group()[1:-1]
+                # Makes sure the URL is real
+                try:
+                    urllib.urlopen(self.comment.permalink)
+                except IOError:
+                    self.comment.permalink = "http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/"
+            else:
+                # Defaults when the user doesn't provide a link
+                self.comment.permalink = "http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/"
+
         # remove RemindMe! and everything before
         tempString = ''.join(re.split(
                 r'RemindMe!', 
                 self.comment.body)
             ).strip()
-
         # regex: Only text around quotes, avoids long messages
         # Use message default if not found
         messageInputTemp = re.search('(["].{0,10000}["])', tempString)
@@ -132,60 +149,81 @@ class Search(object):
         self._replyMessage =(
             "I'll message you on [**{0} UTC**](http://www.wolframalpha.com/input/?i={0} UTC To Local Time)"
             " to remind you of this post."
+            "{remindMeMessage}"
             "\n\n_____\n ^(I will PM you a message so you don't forget about the comment"
             " or thread later on. Just use the **RemindMe!** command and optional date formats. "
             "Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
             " Default wait is a day.)\n\n"
-            "[^([More Info Here])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
-            "[^([Date Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
+            "[^([PM Reminder])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
+            "[Put link here or will default to the FAQs page]%0ANOTE:The link MUST be within the square brackets."
+            "[ and ]%0A%0ARemindMe!) ^| "
+            "[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
+            "[^([Time Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
             "[^([Suggestions])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Suggestion) ^| "
             "[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
         )
-
+        if self._privateMessage == False:
+            remindMeMessage = (
+                "\n\n[**Click Here**](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
+                "[{permalink}]%0ANOTE:Don't forget to put your own time option after the command."
+                "%0A%0ARemindMe!) to also be reminded and to reduce spam.").format(
+                    permalink=self.comment.permalink
+                )
+        else:
+            remindMeMessage = ""
+        self._replyMessage = self._replyMessage.format(
+                self._replyDate,
+                remindMeMessage=remindMeMessage)
 
     def reply(self):
         """
         Messages the user letting as a confirmation
         """
-        sub = reddit.get_submission(self.comment.permalink)
         author = self.comment.author
         try:
-            # First message will be a reply in a thread
-            # afterwards are PM in the same thread
-            if (sub.id not in self.subId):
-                self.comment.reply(self._replyMessage.format(
-                                    self._replyDate))
+            if self._privateMessage == False:
+                sub = reddit.get_submission(self.comment.permalink)
+                # First message will be a reply in a thread
+                # afterwards are PM in the same thread
+                if (sub.id not in self.subId):
+                    self.comment.reply(self._replyMessage)
+                    self.subId.append(sub.id)
+                else:
+                    reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage)
             else:
-                reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage.format(
-                                    self._replyDate))
+                reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage)
         except (HTTPError, ConnectionError, Timeout, timeout) as err:
             print err
             # PM instead if the banned from the subreddit
             if str(err) == "403 Client Error: Forbidden":
-                reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage.format(
-                                    self._replyDate))
+                reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage)
         except RateLimitExceeded as err:
             print err
             # PM when I message too much
-            reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage.format(
-                                    self._replyDate))
+            reddit.send_message(author, 'RemindMeBot Reminder!', self._replyMessage)
             time.sleep(10)
         except APIException as err: # Catch any less specific API errors
             print err
         else:
-            # only message the thread once
-            self.subId.append(sub.id)
-        print self._replyMessage.format(
-                        self._replyDate)
+            print self._replyMessage
+class ReadPM(Thread):
+    """
+    Allows PMs to also work
+    """
+    def __init__(self):
+        Thread.__init__(self)
+        self.daemon = True
+        self.start()
 
-def read_pm():
-    while True:
-        for comment in reddit.get_unread(unset_has_mail=True, update_user=True):
-            if "RemindMe!" in comment.body:
-                redditPM = Search(comment)
-                redditPM.run(privateMessage=True)
-            comment.mark_as_read()
-            
+    def run(self):
+        while True:
+            for comment in reddit.get_unread(unset_has_mail=True, update_user=True):
+                if "RemindMe!" in comment.body and str(type(comment)) == "<class 'praw.objects.Message'>":
+                    redditPM = Search(comment)
+                    redditPM.run(privateMessage=True)
+                comment.mark_as_read()
+            time.sleep(30)
+
 # =============================================================================
 # MAIN
 # =============================================================================
@@ -193,6 +231,7 @@ def read_pm():
 def main():
     reddit.login(USER, PASS)
     print "start"
+    ReadPM()
     while True:
         try:
             # loop through each comment
@@ -209,5 +248,6 @@ def main():
 # =============================================================================
 # RUNNER
 # =============================================================================
+
 if __name__ == '__main__':
     main()

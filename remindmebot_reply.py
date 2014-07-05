@@ -66,13 +66,16 @@ class Reply(object):
     def __init__(self):
         self._queryDB = Connect()
         self._replyMessage =(
-            "RemindMeBot here!\n\n**{0}**\n\n {1} \n\n_____\n"
-            "^(I will PM you a message so you don't forget about the comment"
-            " or thread later on. Just use the **RemindMe!** command and optional date formats.)"
-            "\n\n^(Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
+            "RemindMeBot here! Don't forget to click the parent comment.\n\n**{0}**\n\n {1} "
+            "\n\n_____\n ^(I will PM you a message so you don't forget about the comment"
+            " or thread later on. Just use the **RemindMe!** command and optional date formats. "
+            "Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
             " Default wait is a day.)\n\n"
-            "[^([More Info Here])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
-            "[^([Date Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
+            "[^([PM Reminder])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
+            "[Put link here or will default to the FAQs page]%0ANOTE:The link MUST be within the square brackets."
+            "[ and ]%0A%0ARemindMe!) ^| "
+            "[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
+            "[^([Time Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
             "[^([Suggestions])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Suggestion) ^| "
             "[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
             )
