@@ -177,6 +177,15 @@ class Search(object):
             self.subId.append(sub.id)
         print self._replyMessage.format(
                         self._replyDate)
+
+def read_pm():
+    while True:
+        for comment in reddit.get_unread(unset_has_mail=True, update_user=True):
+            if "RemindMe!" in comment.body:
+                redditPM = Search(comment)
+                redditPM.run(privateMessage=True)
+            comment.mark_as_read()
+            
 # =============================================================================
 # MAIN
 # =============================================================================
