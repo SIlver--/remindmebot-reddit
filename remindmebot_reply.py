@@ -31,7 +31,7 @@ PASS = config.get("Reddit", "password")
 # DB Info
 DB_USER = config.get("SQL", "user")
 DB_PASS = config.get("SQL", "passwd")
-DB_TABLE = config.get("SQL", "table")
+
 # =============================================================================
 # CLASSES
 # =============================================================================
@@ -49,18 +49,6 @@ class Connect(object):
         )
         self.cursor = self.connection.cursor()
 
-    def execute(self, command):
-        self.cursor.execute(command)
-
-    def fetchall(self):
-        return self.cursor.fetchall()
-
-    def commit(self):
-        self.connection.commit()
-
-    def close(self):
-        self.connection.close()
-
 class Reply(object):
 
     def __init__(self):
@@ -72,8 +60,8 @@ class Reply(object):
             "Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
             " Default wait is a day.)\n\n"
             "[^([PM Reminder])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
-            "[Put link here or will default to the FAQs page]%0ANOTE:The link MUST be within the square brackets."
-            "[ and ]%0A%0ARemindMe!) ^| "
+            "[LINK HERE else default to FAQs]%0A%0ANOTE: Don't forget to add time options after RemindMe command!"
+            "%0A%0ARemindMe!) ^| "
             "[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
             "[^([Time Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
             "[^([Suggestions])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Suggestion) ^| "
@@ -88,14 +76,15 @@ class Reply(object):
         # get current time to compare
         currentTime = datetime.now(timezone('UTC'))
         currentTime = format(currentTime, '%Y-%m-%d %H:%M:%S')
-        self._queryDB.execute("SELECT * FROM %s WHERE new_date < '%s'" %(DB_TABLE, currentTime))
+        cmd = "SELECT * FROM message_date WHERE new_date < %s"
+        self._queryDB.cursor.execute(cmd, [currentTime])
 
     def search_db(self):
         """
         Loop through data looking for which comments are old
         """
 
-        data = self._queryDB.fetchall()
+        data = self._queryDB.cursor.fetchall()
         alreadyCommented = []
         for row in data:
             # checks to make sure permalink hasn't been commented already
@@ -105,12 +94,13 @@ class Reply(object):
                 flag = self.new_reply(row[0],row[1], row[3])
                 # removes row based on flag
                 if flag == 1 or flag == 2:
-                    self._queryDB.execute("DELETE FROM %s WHERE permalink = '%s'" %(DB_TABLE, row[0]))
-                    self._queryDB.commit()
+                    cmd = "DELETE FROM message_date WHERE permalink = %s" 
+                    self._queryDB.cursor.execute(cmd, [row[0]])
+                    self._queryDB.connection.commit()
                 alreadyCommented.append(row[0])
 
-        self._queryDB.commit()
-        self._queryDB.close()
+        self._queryDB.connection.commit()
+        self._queryDB.connection.close()
     def new_reply(self, permalink, message, author):
         """
         Replies a second time to the user after a set amount of time
@@ -146,14 +136,14 @@ class Reply(object):
 def main():
     reddit.login(USER, PASS)
     while True:
-        try:
-            checkReply = Reply()
-            checkReply.time_to_reply()
-            checkReply.search_db()
-            print "sleep"
-            time.sleep(60*2)
-        except Exception as err:
-            print err 
+        #try:
+        checkReply = Reply()
+        checkReply.time_to_reply()
+        checkReply.search_db()
+        print "sleep"
+        time.sleep(60*2)
+        #except Exception as err:
+           # print err 
 
 
 # =============================================================================

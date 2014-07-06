@@ -34,7 +34,6 @@ PASS = config.get("Reddit", "password")
 
 DB_USER = config.get("SQL", "user")
 DB_PASS = config.get("SQL", "passwd")
-DB_TABLE = config.get("SQL", "table")
 # =============================================================================
 # CLASSES
 # =============================================================================
@@ -51,18 +50,6 @@ class Connect(object):
             host="localhost", user=DB_USER, passwd=DB_PASS, db="bot"
         )
         self.cursor = self.connection.cursor()
-
-    def execute(self, command):
-        self.cursor.execute(command)
-
-    def fetchall(self):
-        return self.cursor.fetchall()
-
-    def commit(self):
-        self.connection.commit()
-
-    def close(self):
-        self.connection.close()
 
 class Search(object):
     commented = [] # comments already replied to
@@ -130,15 +117,14 @@ class Search(object):
         # Converting time
         #9999/12/31 HH/MM/SS
         self._replyDate = time.strftime('%Y-%m-%d %H:%M:%S', holdTime[0])
-
-        self._addToDB.execute("INSERT INTO %s VALUES ('%s', %s, '%s', '%s')" %(
-                        DB_TABLE, 
+        cmd = "INSERT INTO message_date VALUES (%s, %s, %s, %s)"
+        self._addToDB.cursor.execute(cmd, (
                         self.comment.permalink, 
                         self._messageInput, 
                         self._replyDate, 
                         self.comment.author))
-        self._addToDB.commit()
-        self._addToDB.close()
+        self._addToDB.connection.commit()
+        self._addToDB.connection.close()
         # Info is added to DB, user won't be bothered a second time
         self.commented.append(self.comment.id)
 
@@ -155,8 +141,8 @@ class Search(object):
             "Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
             " Default wait is a day.)\n\n"
             "[^([PM Reminder])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
-            "[Put link here or will default to the FAQs page]%0ANOTE:The link MUST be within the square brackets."
-            "[ and ]%0A%0ARemindMe!) ^| "
+            "[LINK HERE else default to FAQs]%0A%0ANOTE: Don't forget to add time options after RemindMe command!"
+            "%0A%0ARemindMe!) ^| "
             "[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
             "[^([Time Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
             "[^([Suggestions])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Suggestion) ^| "
@@ -165,9 +151,10 @@ class Search(object):
         if self._privateMessage == False:
             remindMeMessage = (
                 "\n\n[**Click Here**](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
-                "[{permalink}]%0ANOTE:Don't forget to put your own time option after the command."
-                "%0A%0ARemindMe!) to also be reminded and to reduce spam.").format(
-                    permalink=self.comment.permalink
+                "[{permalink}]%0A%0ANOTE: Don't forget to add time options after RemindMe command!"
+                "%0A%0ARemindMe! {time}) to also be reminded and to reduce spam.").format(
+                    permalink=self.comment.permalink,
+                    time=self._storeTime
                 )
         else:
             remindMeMessage = ""
@@ -221,7 +208,7 @@ class ReadPM(Thread):
                 if "RemindMe!" in comment.body and str(type(comment)) == "<class 'praw.objects.Message'>":
                     redditPM = Search(comment)
                     redditPM.run(privateMessage=True)
-                comment.mark_as_read()
+                    comment.mark_as_read()
             time.sleep(30)
 
 # =============================================================================
