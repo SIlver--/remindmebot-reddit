@@ -59,7 +59,7 @@ class Search(object):
         self._addToDB = Connect()
         self.comment = comment # Reddit comment Object
         self._messageInput = '"Hello, I\'m here to remind you to see the parent comment!"'
-        self._storeTime = 0
+        self._storeTime = None
         self._replyMessage = ""
         self._replyDate = None
         self._privateMessage = False
@@ -91,18 +91,15 @@ class Search(object):
                 self.comment.permalink = "http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/"
 
         # remove RemindMe! and everything before
-        tempString = ''.join(re.split(
-                r'RemindMe!', 
-                self.comment.body)
-            ).strip()
-        # regex: Only text around quotes, avoids long messages
+        match = re.search(r'RemindMe!', self.comment.body)
+        tempString = self.comment.body[match.start():]
+
         # Use message default if not found
-        messageInputTemp = re.search('(["].{0,10000}["])', tempString)
+        messageInputTemp = re.search('(["].{0,9000}["])', tempString)
         if messageInputTemp:
             self._messageInput = messageInputTemp.group()
-
-        self._storeTime = re.sub('(["].{0,10000}["])', '', tempString)
-
+        # Remove RemindMe!
+        self._storeTime = re.sub('(["].{0,9000}["])', '', tempString)[9:]
     def save_to_db(self):
         """
         Saves the permalink comment, the time, and the message to the DB
@@ -151,10 +148,10 @@ class Search(object):
         if self._privateMessage == False:
             remindMeMessage = (
                 "\n\n[**Click Here**](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
-                "[{permalink}]%0A%0ANOTE: Don't forget to add time options after RemindMe command!"
-                "%0A%0ARemindMe! {time}) to also be reminded and to reduce spam.").format(
+                "[{permalink}]%0ANOTE: MAKE SURE THE TIME OPTIONS ARE CORRECT.%0AEXAMPLE: RemindMe 48"
+                " hours/days/weeks/months etc%0A%0ARemindMe! {time}) to also be reminded and to reduce spam.").format(
                     permalink=self.comment.permalink,
-                    time=self._storeTime
+                    time=self._storeTime.replace('\n', '')
                 )
         else:
             remindMeMessage = ""
@@ -205,8 +202,8 @@ class ReadPM(Thread):
     def run(self):
         while True:
             for comment in reddit.get_unread(unset_has_mail=True, update_user=True):
+                redditPM = Search(comment)
                 if "RemindMe!" in comment.body and str(type(comment)) == "<class 'praw.objects.Message'>":
-                    redditPM = Search(comment)
                     redditPM.run(privateMessage=True)
                     comment.mark_as_read()
             time.sleep(30)
