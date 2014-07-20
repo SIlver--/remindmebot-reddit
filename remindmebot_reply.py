@@ -89,11 +89,11 @@ class Reply(object):
         for row in data:
             # checks to make sure permalink hasn't been commented already
             if row[0] not in alreadyCommented:
-                flag = 0
+                flagDelete = False
                 # MySQl- permalink, message, reddit user
-                flag = self.new_reply(row[0],row[1], row[3])
-                # removes row based on flag
-                if flag == 1 or flag == 2:
+                flagDelete = self.new_reply(row[0],row[1], row[3])
+                # removes row based on flagDelete
+                if flagDelete:
                     cmd = "DELETE FROM message_date WHERE permalink = %s" 
                     self._queryDB.cursor.execute(cmd, [row[0]])
                     self._queryDB.connection.commit()
@@ -101,33 +101,41 @@ class Reply(object):
 
         self._queryDB.connection.commit()
         self._queryDB.connection.close()
+
     def new_reply(self, permalink, message, author):
         """
         Replies a second time to the user after a set amount of time
+        """ 
         """
         print self._replyMessage.format(
                 message,
                 permalink
             )
+        """
+        print "---------------"
+        print author
+        print permalink
         try:
             reddit.send_message(author, 'RemindMeBot Reminder!', 
                 self._replyMessage.format(
                     message,
                     permalink
                 ))
-            return 1
+            print "Did It"
+            return True
         except APIException as err:
-            print err
-            return 2
+            print "APIException", err
+            return False
         except IndexError as err:
-            return 2
+            print "IndexError", err
+            return False
         except (HTTPError, ConnectionError, Timeout, timeout) as err:
-            print err
-            pass
+            print "HTTPError", err
+            return False
         except RateLimitExceeded as err:
-            print err
+            print "RateLimitExceeded", err
             time.sleep(10)
-            pass
+        print "---------------"
 
 # =============================================================================
 # MAIN
