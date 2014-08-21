@@ -54,19 +54,33 @@ class Reply(object):
     def __init__(self):
         self._queryDB = Connect()
         self._replyMessage =(
-            "RemindMeBot here! Don't forget to click the parent comment.\n\n**{0}**\n\n {1} "
-            "\n\n_____\n ^(I will PM you a message so you don't forget about the comment"
-            " or thread later on. Just use the **RemindMe!** command and optional date formats. "
-            "Subsequent confirmations in this unique thread will be sent through PM to avoid spam."
-            " Default wait is a day.)\n\n"
-            "[^([PM Reminder])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
-            "[LINK HERE else default to FAQs]%0A%0ANOTE: Don't forget to add time options after RemindMe command!"
-            "%0A%0ARemindMe!) ^| "
+            "RemindMeBot here!" 
+            "\n\n**Your message:** \n\n>{message}"
+            "\n\n**Your original comment:** \n\n>{original}"
+            "\n\n**The parent comment from your original comment or its submission:** \n\n>{parent}"
+            "\n\n_____\n\n"
             "[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
-            "[^([Time Options])](http://www.reddit.com/r/RemindMeBot/comments/2862bd/remindmebot_date_options/) ^| "
-            "[^([Suggestions])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Suggestion) ^| "
+            "[^([Custom Reminder])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
+            "[LINK INSIDE SQUARE BRACKETS else default to FAQs]%0A%0ANOTE: Don't forget to add the time options after the command."
+            "%0A%0ARemindMe!) ^| "
+            "[^([Feedback])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Feedback) ^| "
             "[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
             )
+
+    def parent_comment(self, dbPermalink):
+        """
+        Returns the parent comment or if it's a top comment
+        return the original submission
+        """
+        try:
+            commentObj = reddit.get_submission(dbPermalink).comments[0]
+            if commentObj.is_root:
+                return str(commentObj.submission.permalink)
+            else:
+                return str(reddit.get_info(thing_id=commentObj.parent_id).permalink)
+        except IndexError as err:
+            print "parrent_comment error"
+            return "It seems your original comment was deleted, unable to return parent comment."
 
     def time_to_reply(self):
         """
@@ -87,14 +101,15 @@ class Reply(object):
         data = self._queryDB.cursor.fetchall()
         alreadyCommented = []
         for row in data:
-            # checks to make sure permalink hasn't been commented already
+            # checks to make sure ID hasn't been commented already
+            # For situtations where errors happened
             if row[0] not in alreadyCommented:
                 flagDelete = False
                 # MySQl- permalink, message, reddit user
-                flagDelete = self.new_reply(row[0],row[1], row[3])
+                flagDelete = self.new_reply(row[1],row[2], row[4])
                 # removes row based on flagDelete
                 if flagDelete:
-                    cmd = "DELETE FROM message_date WHERE permalink = %s" 
+                    cmd = "DELETE FROM message_date WHERE id = %s" 
                     self._queryDB.cursor.execute(cmd, [row[0]])
                     self._queryDB.connection.commit()
                 alreadyCommented.append(row[0])
@@ -116,10 +131,11 @@ class Reply(object):
         print author
         print permalink
         try:
-            reddit.send_message(author, 'RemindMeBot Reminder!', 
+            reddit.send_message(author, 'Hello, ' + author + ' RemindMeBot Here!', 
                 self._replyMessage.format(
-                    message,
-                    permalink
+                    message=message,
+                    original=permalink,
+                    parent=self.parent_comment(permalink)
                 ))
             print "Did It"
             return True
@@ -135,7 +151,6 @@ class Reply(object):
         except RateLimitExceeded as err:
             print "RateLimitExceeded", err
             time.sleep(10)
-        print "---------------"
 
 # =============================================================================
 # MAIN
@@ -148,8 +163,7 @@ def main():
         checkReply = Reply()
         checkReply.time_to_reply()
         checkReply.search_db()
-        print "sleep"
-        time.sleep(60*2)
+        time.sleep(5)
         #except Exception as err:
            # print err 
 
