@@ -81,6 +81,10 @@ class Reply(object):
         except IndexError as err:
             print "parrent_comment error"
             return "It seems your original comment was deleted, unable to return parent comment."
+        # Catch any URLs that are not reddit comments
+        except Exception  as err:
+            print "HTTPError/PRAW parent comment"
+            return "Parent comment not required for this URL."
 
     def time_to_reply(self):
         """
@@ -138,6 +142,9 @@ class Reply(object):
                     parent=self.parent_comment(permalink)
                 ))
             print "Did It"
+            return True    
+        except InvalidUser as err:
+            print "InvalidUser", err
             return True
         except APIException as err:
             print "APIException", err
