@@ -3,13 +3,15 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
-
+import traceback
 import praw
+import OAuth2Util
 import re
 import MySQLdb
 import ConfigParser
 import time
 import urllib
+import requests
 import parsedatetime.parsedatetime as pdt
 from datetime import datetime, timedelta
 from requests.exceptions import HTTPError, ConnectionError, Timeout
@@ -27,13 +29,15 @@ config = ConfigParser.ConfigParser()
 config.read("remindmebot.cfg")
 
 #Reddit info
-user_agent = ("RemindMeBot v2.0 by /u/RemindMeBotWrangler")
-reddit = praw.Reddit(user_agent = user_agent)
-USER = config.get("Reddit", "username")
-PASS = config.get("Reddit", "password")
+reddit = praw.Reddit(user_agent= "RemindMes")
+o = OAuth2Util.OAuth2Util(reddit, print_log = True)
+o.refresh(force=True)
 
 DB_USER = config.get("SQL", "user")
 DB_PASS = config.get("SQL", "passwd")
+
+# Time when program was started
+START_TIME = time.time()
 # =============================================================================
 # CLASSES
 # =============================================================================
@@ -71,7 +75,6 @@ class Search(object):
         self.save_to_db()
         self.build_message()
         self.reply()
-
     def parse_comment(self):
         """
         Parse comment looking for the message and time
@@ -90,14 +93,20 @@ class Search(object):
                 # Defaults when the user doesn't provide a link
                 self.comment.permalink = "http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/"
 
-        # remove RemindMe! and everything before
-        match = re.search(r'RemindMe!', self.comment.body)
+        # remove RemindMe! or !RemindMe (case insenstive)
+        match = re.search(r'(?i)(!*)RemindMe(!*)', self.comment.body)
+        # and everything before
         tempString = self.comment.body[match.start():]
+
+        # remove all format breaking characters IE: [ ] ( ) newline
+        tempString = tempString.split("\n")[0]
+        #tempString = re.sub('\([^)]*\)','', tempString)
 
         # Use message default if not found
         messageInputTemp = re.search('(["].{0,9000}["])', tempString)
         if messageInputTemp:
             self._messageInput = messageInputTemp.group()
+
         # Remove RemindMe!
         self._storeTime = re.sub('(["].{0,9000}["])', '', tempString)[9:]
     def save_to_db(self):
@@ -116,8 +125,8 @@ class Search(object):
         self._replyDate = time.strftime('%Y-%m-%d %H:%M:%S', holdTime[0])
         cmd = "INSERT INTO message_date (permalink, message, new_date, userID) VALUES (%s, %s, %s, %s)"
         self._addToDB.cursor.execute(cmd, (
-                        self.comment.permalink, 
-                        self._messageInput, 
+                        self.comment.permalink.encode('utf-8'), 
+                        self._messageInput.encode('utf-8'), 
                         self._replyDate, 
                         self.comment.author))
         self._addToDB.connection.commit()
@@ -173,6 +182,7 @@ class Search(object):
                 else:
                     reddit.send_message(author, 'Hello, ' + str(author) + ' RemindMeBot Confirmation Sent', self._replyMessage)
             else:
+                print str(author)
                 reddit.send_message(author, 'Hello, ' + str(author) + ' RemindMeBot Confirmation Sent', self._replyMessage)
         except (HTTPError, ConnectionError, Timeout, timeout) as err:
             print err
@@ -188,48 +198,65 @@ class Search(object):
             print err
         #else:
             #print self._replyMessage
-class ReadPM(Thread):
-    """
-    Allows PMs to also work
-    """
-    def __init__(self):
-        Thread.__init__(self)
-        self.daemon = True
-        self.start()
 
-    def run(self):
-        while True:
-            try:
-                for comment in reddit.get_unread(unset_has_mail=True, update_user=True):
-                    redditPM = Search(comment)
-                    if "RemindMe!" in comment.body and str(type(comment)) == "<class 'praw.objects.Message'>":
-                        redditPM.run(privateMessage=True)
-                        comment.mark_as_read()
-                time.sleep(30)
-            except Exception as err:
-                print "THREAD ERROR", err
+def read_pm():
+    try:
+        for comment in reddit.get_unread(unset_has_mail=True, update_user=True):
+            redditPM = Search(comment)
+            if (("remindme!" in comment.body.lower() or
+                 "!remindme" in comment.body.lower()) and 
+                 isinstance(comment, praw.objects.Message) 
+            ): 
+                redditPM.run(privateMessage=True)
+                comment.mark_as_read()
+        # refreshes tokens
+        o.refresh()
+    except Exception as err:
+        print "THREAD ERROR"
+        print traceback.format_exc()
+
+def check_comment(comment):
+    redditCall = Search(comment)
+    if (("remindme!" in comment.body.lower() or
+        "!remindme" in comment.body.lower()) and 
+        redditCall.comment.id not in redditCall.commented and
+        'RemindMeBot' != str(comment.author) and
+        START_TIME < redditCall.comment.created_utc):
+            print "in"
+            t = Thread(target=redditCall.run())
+            t.start()
 
 # =============================================================================
 # MAIN
 # =============================================================================
 
 def main():
-    reddit.login(USER, PASS)
     print "start"
-    ReadPM()
     while True:
         try:
-            # loop through each comment
-            for comment in praw.helpers.comment_stream(reddit, 'all', limit=None, verbosity=0):
-                redditCall = Search(comment)
-                if ("RemindMe!" in comment.body and 
-                    redditCall.comment.id not in redditCall.commented and
-                    'RemindMeBot' != str(comment.author)):
-                        print "in"
-                        t = Thread(target=redditCall.run())
-                        t.start()
+            # grab the request
+            request = requests.get('https://api.pushshift.io/reddit/search?q=%22RemindMe%22&limit=50')
+            json = request.json()
+            comments =  json["data"]        
+            for rawcomment in comments:
+                # object constructor requires empty attribute
+                rawcomment['_replies'] = ''
+                comment = praw.objects.Comment(reddit, rawcomment)
+                check_comment(comment)
+            read_pm()
+            print "----"
+            time.sleep(30)
         except Exception as err:
            print err
+        """
+        Will add later if problem with api.pushshift
+        hence why check_comment is a function
+        try:
+            for comment in praw.helpers.comment_stream(reddit, 'all', limit = 1, verbosity = 0):
+                check_comment(comment)
+        except Exception as err:
+           print err
+        """
 # =============================================================================
 # RUNNER
 # =============================================================================

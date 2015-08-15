@@ -3,7 +3,9 @@
 # =============================================================================
 # IMPORTS
 # =============================================================================
+
 import praw
+import OAuth2Util
 import re
 import MySQLdb
 import ConfigParser
@@ -23,10 +25,7 @@ config = ConfigParser.ConfigParser()
 config.read("remindmebot.cfg")
 
 #Reddit info
-user_agent = ("RemindMeBot v2.0 by /u/RemindMeBotWrangler")
-reddit = praw.Reddit(user_agent = user_agent)
-USER = config.get("Reddit", "username")
-PASS = config.get("Reddit", "password")
+reddit = praw.Reddit("RemindMeB0tReply")
 
 # DB Info
 DB_USER = config.get("SQL", "user")
@@ -116,7 +115,7 @@ class Reply(object):
                     cmd = "DELETE FROM message_date WHERE id = %s" 
                     self._queryDB.cursor.execute(cmd, [row[0]])
                     self._queryDB.connection.commit()
-                alreadyCommented.append(row[0])
+                    alreadyCommented.append(row[0])
 
         self._queryDB.connection.commit()
         self._queryDB.connection.close()
@@ -133,13 +132,15 @@ class Reply(object):
         """
         print "---------------"
         print author
-        print permalink
+        print permalink        
         try:
-            reddit.send_message(author, 'Hello, ' + author + ' RemindMeBot Here!', 
-                self._replyMessage.format(
+            reddit.send_message(
+                recipient=str(author), 
+                subject='Hello, ' + str(author) + ' RemindMeBot Here!', 
+                message=self._replyMessage.format(
                     message=message,
                     original=permalink,
-                    parent=self.parent_comment(permalink)
+                    parent= self.parent_comment(permalink)
                 ))
             print "Did It"
             return True    
@@ -154,25 +155,32 @@ class Reply(object):
             return False
         except (HTTPError, ConnectionError, Timeout, timeout) as err:
             print "HTTPError", err
+            time.sleep(10)
             return False
         except RateLimitExceeded as err:
             print "RateLimitExceeded", err
             time.sleep(10)
-
+            return False
+        except praw.errors.HTTPException as err:
+            print"praw.errors.HTTPException"
+            time.sleep(10)
+            return False            
 # =============================================================================
 # MAIN
 # =============================================================================
 
 def main():
-    reddit.login(USER, PASS)
+    o = OAuth2Util.OAuth2Util(reddit, print_log=True)
     while True:
-        #try:
+        try:
+            o.refresh()
+        except Exception as err:
+            print err         
         checkReply = Reply()
         checkReply.time_to_reply()
         checkReply.search_db()
-        time.sleep(5)
-        #except Exception as err:
-           # print err 
+        time.sleep(10)
+
 
 
 # =============================================================================
