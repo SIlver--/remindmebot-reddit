@@ -58,6 +58,17 @@ class Connect(object):
 class Search(object):
     commented = [] # comments already replied to
     subId = [] # reddit threads already replied in
+    endMessage = (
+        "\n\n_____\n\n"
+        "|[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
+        "|[^([Custom])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
+            "[LINK INSIDE SQUARE BRACKETS else default to FAQs]%0A%0A"
+            "NOTE: Don't forget to add the time options after the command.%0A%0ARemindMe!)"
+        "|[^([Your Reminders])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=List Of Reminders&message=MyReminders!)"
+        "|[^([Feedback])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Feedback)"
+        "|[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
+        "\n|-|-|-|-|-|"
+        )
 
     def __init__(self, comment):
         self._addToDB = Connect()
@@ -141,16 +152,9 @@ class Search(object):
         permalink = self.comment.permalink
         self._replyMessage =(
             "Messaging you on [**{0} UTC**](http://www.wolframalpha.com/input/?i={0} UTC To Local Time)"
-            " to remind you of [**this comment.**]({commentPermalink})"
-            "{remindMeMessage}"
-            "\n\n_____\n\n"
-            "[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
-            "[^([Custom Reminder])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
-            "[LINK INSIDE SQUARE BRACKETS else default to FAQs]%0A%0ANOTE: Don't forget to add the time options after the command."
-            "%0A%0ARemindMe!) ^| "
-            "[^([Feedback])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Feedback) ^| "
-            "[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
-        )
+            " to remind you of [**this.**]({commentPermalink})"
+            "{remindMeMessage}")
+
         try:
             self.sub = reddit.get_submission(self.comment.permalink)
         except Exception as err:
@@ -171,6 +175,7 @@ class Search(object):
                 self._replyDate,
                 remindMeMessage=remindMeMessage,
                 commentPermalink=permalink)
+        self._replyMessage += Search.endMessage
 
     def reply(self):
         """
@@ -180,7 +185,7 @@ class Search(object):
         author = self.comment.author
         def send_message():
             reddit.send_message(author, 'Hello, ' + str(author) + ' RemindMeBot Confirmation Sent', self._replyMessage)
-              
+
         try:
             if self._privateMessage == False:
                 # First message will be a reply in a thread
@@ -210,14 +215,38 @@ class Search(object):
         #else:
             #print self._replyMessage
 
+def grab_list_of_reminders(username):
+    """
+    Grabs all the reminders of the user
+    """
+    database = Connect()
+    query = "SELECT permalink, message, new_date FROM message_date WHERE userid = %s"
+    database.cursor.execute(query, [username])
+    data = database.cursor.fetchall()
+    table = ("|Permalink|Message|Date|\n"
+                "|-|-|-|")
+    for row in data:
+        date = str(row[2])
+        table += (
+            "\n|" + row[0] + "|" + row[1] + "|" + "[" + date  +"]"
+            "(http://www.wolframalpha.com/input/?i=" + str(row[2]) + ")|"
+            )
+    if len(data) == 0: 
+        table = "Looks like you have no reminders. Click the [Custom] button below to make one!"
+    elif len(table) > 9000:
+        table = "Sorry the comment was too long to display. Message /u/RemindMeBotWrangler as this was his lazy error catching."
+    table += Search.endMessage
+    return table
+
 def read_pm():
     try:
         for message in reddit.get_unread(unset_has_mail=True, update_user=True):
-            if (("remindme!" in message.body.lower() or "!remindme" in message.body.lower()) and isinstance(message, praw.objects.Message)):
+            prawobject = isinstance(message, praw.objects.Message)
+            if (("remindme!" in message.body.lower() or "!remindme" in message.body.lower()) and prawobject):
                 redditPM = Search(message)
                 redditPM.run(privateMessage=True)
                 message.mark_as_read()
-            elif (("delete!" in message.body.lower() or "!delete" in message.body.lower()) and isinstance(message, praw.objects.Message)):  
+            elif (("delete!" in message.body.lower() or "!delete" in message.body.lower()) and prawobject):  
                 givenid = re.findall(r'delete!\s(.*?)$', message.body.lower())[0]
                 givenid = 't1_'+givenid
                 comment = reddit.get_info(thing_id=givenid)
@@ -233,6 +262,10 @@ def read_pm():
                 except AttributeError as err:
                     # comment might be deleted already
                     pass
+                message.mark_as_read()
+            elif(("myreminders!" in message.body.lower() or "!myreminders" in message.body.lower()) and prawobject):
+                listOfReminders = grab_list_of_reminders(message.author.name)
+                message.reply(listOfReminders)
                 message.mark_as_read()
         o.refresh()
     except Exception as err:
@@ -255,6 +288,8 @@ def check_comment(comment):
 
 def main():
     print "start"
+    read_pm()
+
     while True:
         try:
             # grab the request

@@ -58,12 +58,14 @@ class Reply(object):
             "\n\n**Your original comment:** \n\n>{original}"
             "\n\n**The parent comment from your original comment or its submission:** \n\n>{parent}"
             "\n\n_____\n\n"
-            "[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/) ^| "
-            "[^([Custom Reminder])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
-            "[LINK INSIDE SQUARE BRACKETS else default to FAQs]%0A%0ANOTE: Don't forget to add the time options after the command."
-            "%0A%0ARemindMe!) ^| "
-            "[^([Feedback])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Feedback) ^| "
-            "[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
+            "|[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
+            "|[^([Custom])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
+                "[LINK INSIDE SQUARE BRACKETS else default to FAQs]%0A%0A"
+                "NOTE: Don't forget to add the time options after the command.%0A%0ARemindMe!)"
+            "|[^([Your Reminders])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=List Of Reminders&message=MyReminders!)"
+            "|[^([Feedback])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Feedback)"
+            "|[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
+            "\n|-|-|-|-|-|"
             )
 
     def parent_comment(self, dbPermalink):
