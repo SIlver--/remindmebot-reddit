@@ -15,7 +15,7 @@ import requests
 import parsedatetime.parsedatetime as pdt
 from datetime import datetime, timedelta
 from requests.exceptions import HTTPError, ConnectionError, Timeout
-from praw.errors import ExceptionList, APIException, InvalidCaptcha, InvalidUser, RateLimitExceeded
+from praw.errors import ExceptionList, APIException, InvalidCaptcha, InvalidUser, RateLimitExceeded, Forbidden
 from socket import timeout
 from pytz import timezone
 from threading import Thread
@@ -151,16 +151,22 @@ class Search(object):
             "[^([Feedback])](http://www.reddit.com/message/compose/?to=RemindMeBotWrangler&subject=Feedback) ^| "
             "[^([Code])](https://github.com/SIlver--/remindmebot-reddit)"
         )
-
-        if self._privateMessage == False:
+        try:
+            self.sub = reddit.get_submission(self.comment.permalink)
+        except Exception as err:
+            print "link had http"
+        if self._privateMessage == False and self.sub.id not in self.subId:
             remindMeMessage = (
                 "\n\n[**CLICK THIS LINK**](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
-                "[{permalink}]%0A%0ARemindMe! {time}) to send a PM to also be reminded and to reduce spam.").format(
+                "[{permalink}]%0A%0ARemindMe! {time}) to send a PM to also be reminded and to reduce spam."
+                "\n\n^(Parent commenter can ) [^(delete this message to hide from others.)]"
+                "(http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Delete Comment&message=Delete! ____id____)").format(
                     permalink=permalink,
                     time=self._storeTime.replace('\n', '')
                 )
         else:
             remindMeMessage = ""
+
         self._replyMessage = self._replyMessage.format(
                 self._replyDate,
                 remindMeMessage=remindMeMessage,
@@ -170,30 +176,35 @@ class Search(object):
         """
         Messages the user letting as a confirmation
         """
+
         author = self.comment.author
+        def send_message():
+            reddit.send_message(author, 'Hello, ' + str(author) + ' RemindMeBot Confirmation Sent', self._replyMessage)
+              
         try:
             if self._privateMessage == False:
-                sub = reddit.get_submission(self.comment.permalink)
                 # First message will be a reply in a thread
                 # afterwards are PM in the same thread
-                if (sub.id not in self.subId):
-                    self.comment.reply(self._replyMessage)
-                    self.subId.append(sub.id)
+                if (self.sub.id not in self.subId):
+                    newcomment = self.comment.reply(self._replyMessage)
+                    self.subId.append(self.sub.id)
+                    # grabbing comment just made
+                    reddit.get_info( 
+                            thing_id='t1_'+str(newcomment.id)
+                            # edit comment with self ID so it can be deleted
+                        ).edit(self._replyMessage.replace('____id____', str(newcomment.id))) 
                 else:
-                    reddit.send_message(author, 'Hello, ' + str(author) + ' RemindMeBot Confirmation Sent', self._replyMessage)
+                    send_message()
             else:
                 print str(author)
-                reddit.send_message(author, 'Hello, ' + str(author) + ' RemindMeBot Confirmation Sent', self._replyMessage)
-        except (HTTPError, ConnectionError, Timeout, timeout) as err:
-            print err
-            # PM instead if the banned from the subreddit
-            if str(err) == "403 Client Error: Forbidden":
-                reddit.send_message(author, 'Hello, ' + str(author) + ' RemindMeBot Confirmation Sent', self._replyMessage)
+                send_message()
         except RateLimitExceeded as err:
             print err
             # PM when I message too much
-            reddit.send_message(author, 'Hello, ' + str(author) + ' RemindMeBot Confirmation Sent', self._replyMessage)
+            send_message()
             time.sleep(10)
+        except Forbidden as err:
+            send_message()
         except APIException as err: # Catch any less specific API errors
             print err
         #else:
@@ -201,18 +212,30 @@ class Search(object):
 
 def read_pm():
     try:
-        for comment in reddit.get_unread(unset_has_mail=True, update_user=True):
-            redditPM = Search(comment)
-            if (("remindme!" in comment.body.lower() or
-                 "!remindme" in comment.body.lower()) and 
-                 isinstance(comment, praw.objects.Message) 
-            ): 
+        for message in reddit.get_unread(unset_has_mail=True, update_user=True):
+            if (("remindme!" in message.body.lower() or "!remindme" in message.body.lower()) and isinstance(message, praw.objects.Message)):
+                redditPM = Search(message)
                 redditPM.run(privateMessage=True)
-                comment.mark_as_read()
-        # refreshes tokens
+                message.mark_as_read()
+            elif (("delete!" in message.body.lower() or "!delete" in message.body.lower()) and isinstance(message, praw.objects.Message)):  
+                givenid = re.findall(r'delete!\s(.*?)$', message.body.lower())[0]
+                givenid = 't1_'+givenid
+                comment = reddit.get_info(thing_id=givenid)
+                try:
+                    parentcomment = reddit.get_info(thing_id=comment.parent_id)
+                    if message.author.name == parentcomment.author.name:
+                        comment.delete()
+                        submissionId = reddit.get_submission(comment.permalink).id
+                        Search.subId.remove(submissionId)
+                except ValueError as err:
+                    # comment wasn't inside the list
+                    pass
+                except AttributeError as err:
+                    # comment might be deleted already
+                    pass
+                message.mark_as_read()
         o.refresh()
     except Exception as err:
-        print "THREAD ERROR"
         print traceback.format_exc()
 
 def check_comment(comment):
@@ -235,7 +258,7 @@ def main():
     while True:
         try:
             # grab the request
-            request = requests.get('https://api.pushshift.io/reddit/search?q=%22RemindMe%22&limit=50')
+            request = requests.get('https://api.pushshift.io/reddit/search?q=%22RemindMe%22&limit=100')
             json = request.json()
             comments =  json["data"]        
             for rawcomment in comments:
@@ -247,7 +270,8 @@ def main():
             print "----"
             time.sleep(30)
         except Exception as err:
-           print err
+            print traceback.format_exc()           
+            time.sleep(30)
         """
         Will add later if problem with api.pushshift
         hence why check_comment is a function
