@@ -220,16 +220,17 @@ def grab_list_of_reminders(username):
     Grabs all the reminders of the user
     """
     database = Connect()
-    query = "SELECT permalink, message, new_date FROM message_date WHERE userid = %s"
+    query = "SELECT permalink, message, new_date, id FROM message_date WHERE userid = %s ORDER BY new_date"
     database.cursor.execute(query, [username])
     data = database.cursor.fetchall()
-    table = ("|Permalink|Message|Date|\n"
-                "|-|-|-|")
+    table = ("|Permalink|Message|Date|Remove|\n"
+                "|-|-|-|:-:|")
     for row in data:
         date = str(row[2])
         table += (
-            "\n|" + row[0] + "|" + row[1] + "|" + "[" + date  +"]"
-            "(http://www.wolframalpha.com/input/?i=" + str(row[2]) + ")|"
+            "\n|" + row[0] + "|" +   row[1] + "|" + 
+            "[" + date  +"](http://www.wolframalpha.com/input/?i=" + str(row[2]) + ")|"
+            "[[X]](https://www.reddit.com/message/compose/?to=RemindMeBot&subject=Remove&message=Remove!%20"+ str(row[3]) + ")|"
             )
     if len(data) == 0: 
         table = "Looks like you have no reminders. Click the [Custom] button below to make one!"
@@ -237,6 +238,25 @@ def grab_list_of_reminders(username):
         table = "Sorry the comment was too long to display. Message /u/RemindMeBotWrangler as this was his lazy error catching."
     table += Search.endMessage
     return table
+
+def remove_reminder(username, idnum):
+    """
+    Deletes the reminder from the database
+    """
+    database = Connect()
+    query = "SELECT userid FROM message_date WHERE id = %s"
+    database.cursor.execute(query, [idnum])
+    data = database.cursor.fetchall()
+    deleteFlag = False
+    for row in data:
+        userid = str(row[0])
+        if userid == username:
+            cmd = "DELETE FROM message_date WHERE id = %s" 
+            database.cursor.execute(cmd, [idnum])
+            database.connection.commit()
+            deleteFlag = True
+
+    return deleteFlag
 
 def read_pm():
     try:
@@ -263,9 +283,19 @@ def read_pm():
                     # comment might be deleted already
                     pass
                 message.mark_as_read()
-            elif(("myreminders!" in message.body.lower() or "!myreminders" in message.body.lower()) and prawobject):
+            elif (("myreminders!" in message.body.lower() or "!myreminders" in message.body.lower()) and prawobject):
                 listOfReminders = grab_list_of_reminders(message.author.name)
                 message.reply(listOfReminders)
+                message.mark_as_read()
+            elif (("remove!" in message.body.lower() or "!remove" in message.body.lower()) and prawobject):
+                givenid = re.findall(r'remove!\s(.*?)$', message.body.lower())[0]
+                deletedFlag = remove_reminder(message.author.name, givenid)
+                listOfReminders = grab_list_of_reminders(message.author.name)
+                # This means the user did own that reminder
+                if deletedFlag == True:
+                    message.reply("Reminder deleted. Your current Reminders:\n\n" + listOfReminders)
+                else:
+                    message.reply("Try again with the current IDs that belong to you below. Your current Reminders:\n\n" + listOfReminders)
                 message.mark_as_read()
         o.refresh()
     except Exception as err:
