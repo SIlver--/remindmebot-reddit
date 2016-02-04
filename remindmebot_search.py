@@ -9,6 +9,7 @@ import OAuth2Util
 import re
 import MySQLdb
 import ConfigParser
+import ast
 import time
 import urllib
 import requests
@@ -58,6 +59,17 @@ class Connect(object):
 class Search(object):
     commented = [] # comments already replied to
     subId = [] # reddit threads already replied in
+    
+    # Fills subId with previous threads. Helpful for restarts
+    database = Connect()
+    cmd = "SELECT list FROM comment_list WHERE id = 1"
+    database.cursor.execute(cmd)
+    data = database.cursor.fetchall()
+    subId = ast.literal_eval("[" + data[0][0] + "]")
+    database.connection.commit()
+    database.connection.close()
+    print subId
+
     endMessage = (
         "\n\n_____\n\n"
         "|[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
@@ -78,7 +90,6 @@ class Search(object):
         self._replyMessage = ""
         self._replyDate = None
         self._privateMessage = False
-
     def run(self, privateMessage=False):
         if privateMessage == True:
             self._privateMessage = True
@@ -111,13 +122,16 @@ class Search(object):
 
         # remove all format breaking characters IE: [ ] ( ) newline
         tempString = tempString.split("\n")[0]
-        #tempString = re.sub('\([^)]*\)','', tempString)
+        # adds " at the end if only 1 exists
+        if (tempString.count('"') == 1):
+            tempString = tempString + '"'
 
         # Use message default if not found
         messageInputTemp = re.search('(["].{0,9000}["])', tempString)
         if messageInputTemp:
             self._messageInput = messageInputTemp.group()
-
+        # Fix issue with dashes for parsedatetime lib
+        tempString = tempString.replace('-', "/")
         # Remove RemindMe!
         self._storeTime = re.sub('(["].{0,9000}["])', '', tempString)[9:]
     def save_to_db(self):
@@ -126,11 +140,11 @@ class Search(object):
         """
 
         cal = pdt.Calendar()
-        if cal.parse(self._storeTime)[1] == 0:
+        holdTime = cal.parse(self._storeTime)
+        if holdTime[1] == 0:
             # default time
             holdTime = cal.parse("1 day", datetime.now(timezone('UTC')))
-        else:
-            holdTime = cal.parse(self._storeTime, datetime.now(timezone('UTC')))
+            self._replyMessage = "**Defaulted to one day.**\n\n"
         # Converting time
         #9999/12/31 HH/MM/SS
         self._replyDate = time.strftime('%Y-%m-%d %H:%M:%S', holdTime[0])
@@ -150,8 +164,8 @@ class Search(object):
         Buildng message for user
         """
         permalink = self.comment.permalink
-        self._replyMessage =(
-            "Messaging you on [**{0} UTC**](http://www.wolframalpha.com/input/?i={0} UTC To Local Time)"
+        self._replyMessage +=(
+            "I will be messaging you on [**{0} UTC**](http://www.wolframalpha.com/input/?i={0} UTC To Local Time)"
             " to remind you of [**this.**]({commentPermalink})"
             "{remindMeMessage}")
 
@@ -193,6 +207,13 @@ class Search(object):
                 if (self.sub.id not in self.subId):
                     newcomment = self.comment.reply(self._replyMessage)
                     self.subId.append(self.sub.id)
+                    # adding it to database as well
+                    database = Connect()
+                    insertsubid = ", \'" + self.sub.id + "\'"
+                    cmd = 'UPDATE comment_list set list = CONCAT(list, "{0}") where id = 1'.format(insertsubid)
+                    database.cursor.execute(cmd)
+                    database.connection.commit()
+                    database.connection.close()
                     # grabbing comment just made
                     reddit.get_info( 
                             thing_id='t1_'+str(newcomment.id)
@@ -258,6 +279,22 @@ def remove_reminder(username, idnum):
 
     return deleteFlag
 
+def millionaire_makers_count():
+    """
+    Counts how many people are waiting
+    """
+    database = Connect()
+    query = "SELECT count(permalink) FROM message_date WHERE permalink = 'http://reddit.com/r/MillionaireMakers/about/sticky'"
+    database.cursor.execute(query)
+    data = database.cursor.fetchall()
+    deleteFlag = False
+    for row in data:
+        count = str(row[0])
+
+    message = "There are currently **" + count + "** users who are waiting to be reminded of the next /r/MillionaireMakers draw."
+
+    return message + Search.endMessage
+
 def read_pm():
     try:
         for message in reddit.get_unread(unset_has_mail=True, update_user=True):
@@ -274,8 +311,6 @@ def read_pm():
                     parentcomment = reddit.get_info(thing_id=comment.parent_id)
                     if message.author.name == parentcomment.author.name:
                         comment.delete()
-                        submissionId = reddit.get_submission(comment.permalink).id
-                        Search.subId.remove(submissionId)
                 except ValueError as err:
                     # comment wasn't inside the list
                     pass
@@ -296,6 +331,9 @@ def read_pm():
                     message.reply("Reminder deleted. Your current Reminders:\n\n" + listOfReminders)
                 else:
                     message.reply("Try again with the current IDs that belong to you below. Your current Reminders:\n\n" + listOfReminders)
+                message.mark_as_read()
+            elif (("millionairecount!" in message.body.lower() or "!millionairecount" in message.body.lower()) and prawobject):
+                message.reply(millionaire_makers_count())
                 message.mark_as_read()
         o.refresh()
     except Exception as err:
@@ -318,20 +356,20 @@ def check_comment(comment):
 
 def main():
     print "start"
-    read_pm()
 
     while True:
         try:
+            o.refresh()
             # grab the request
             request = requests.get('https://api.pushshift.io/reddit/search?q=%22RemindMe%22&limit=100')
             json = request.json()
-            comments =  json["data"]        
+            comments =  json["data"]
+            read_pm()   
             for rawcomment in comments:
                 # object constructor requires empty attribute
                 rawcomment['_replies'] = ''
                 comment = praw.objects.Comment(reddit, rawcomment)
                 check_comment(comment)
-            read_pm()
             print "----"
             time.sleep(30)
         except Exception as err:

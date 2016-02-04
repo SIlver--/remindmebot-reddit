@@ -26,6 +26,7 @@ config.read("remindmebot.cfg")
 
 #Reddit info
 reddit = praw.Reddit("RemindMeB0tReply")
+o = OAuth2Util.OAuth2Util(reddit, print_log=True)
 
 # DB Info
 DB_USER = config.get("SQL", "user")
@@ -53,10 +54,13 @@ class Reply(object):
     def __init__(self):
         self._queryDB = Connect()
         self._replyMessage =(
-            "RemindMeBot here!" 
-            "\n\n**Your message:** \n\n>{message}"
-            "\n\n**Your original comment:** \n\n>{original}"
-            "\n\n**The parent comment from your original comment or its submission:** \n\n>{parent}"
+            "RemindMeBot private message here!" 
+            "\n\n**The message:** \n\n>{message}"
+            "\n\n**The original comment:** \n\n>{original}"
+            "\n\n**The parent comment from the original comment or its submission:** \n\n>{parent}"
+            "\n\n#Would you like to be reminded of the original comment again? Just set your time again after the RemindMe! command. [CLICK HERE]"
+            "(http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message=[{original}]"
+            "%0A%0ARemindMe!)"
             "\n\n_____\n\n"
             "|[^([FAQs])](http://www.reddit.com/r/RemindMeBot/comments/24duzp/remindmebot_info/)"
             "|[^([Custom])](http://www.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message="
@@ -74,11 +78,11 @@ class Reply(object):
         return the original submission
         """
         try:
-            commentObj = reddit.get_submission(dbPermalink).comments[0]
+            commentObj = reddit.get_submission(_force_utf8(dbPermalink)).comments[0]
             if commentObj.is_root:
-                return str(commentObj.submission.permalink)
+                return _force_utf8(commentObj.submission.permalink)
             else:
-                return str(reddit.get_info(thing_id=commentObj.parent_id).permalink)
+                return _force_utf8(reddit.get_info(thing_id=commentObj.parent_id).permalink)
         except IndexError as err:
             print "parrent_comment error"
             return "It seems your original comment was deleted, unable to return parent comment."
@@ -106,6 +110,7 @@ class Reply(object):
         data = self._queryDB.cursor.fetchall()
         alreadyCommented = []
         for row in data:
+            o.refresh()
             # checks to make sure ID hasn't been commented already
             # For situtations where errors happened
             if row[0] not in alreadyCommented:
@@ -138,10 +143,10 @@ class Reply(object):
         try:
             reddit.send_message(
                 recipient=str(author), 
-                subject='Hello, ' + str(author) + ' RemindMeBot Here!', 
+                subject='Hello, ' + _force_utf8(str(author)) + ' RemindMeBot Here!', 
                 message=self._replyMessage.format(
-                    message=message,
-                    original=permalink,
+                    message=_force_utf8(message),
+                    original=_force_utf8(permalink),
                     parent= self.parent_comment(permalink)
                 ))
             print "Did It"
@@ -166,13 +171,39 @@ class Reply(object):
         except praw.errors.HTTPException as err:
             print"praw.errors.HTTPException"
             time.sleep(10)
-            return False            
+            return False
+
+"""
+From Reddit's Code 
+https://github.com/reddit/reddit/blob/master/r2/r2/lib/unicode.py
+Brought to attention thanks to /u/13steinj
+"""
+def _force_unicode(text):
+
+    if text == None:
+        return u''
+
+    if isinstance(text, unicode):
+        return text
+
+    try:
+        text = unicode(text, 'utf-8')
+    except UnicodeDecodeError:
+        text = unicode(text, 'latin1')
+    except TypeError:
+        text = unicode(text)
+    return text
+
+
+def _force_utf8(text):
+    return str(_force_unicode(text).encode('utf8'))
+
+
 # =============================================================================
 # MAIN
 # =============================================================================
 
 def main():
-    o = OAuth2Util.OAuth2Util(reddit, print_log=True)
     while True:
         try:
             o.refresh()
@@ -182,7 +213,6 @@ def main():
         checkReply.time_to_reply()
         checkReply.search_db()
         time.sleep(10)
-
 
 
 # =============================================================================
