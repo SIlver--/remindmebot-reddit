@@ -27,7 +27,7 @@ config.read("remindmebot.cfg")
 #Reddit info
 reddit = praw.Reddit("RemindMeB0tReply")
 o = OAuth2Util.OAuth2Util(reddit, print_log=True)
-
+o.refresh(force=True)
 # DB Info
 DB_USER = config.get("SQL", "user")
 DB_PASS = config.get("SQL", "passwd")
@@ -110,7 +110,6 @@ class Reply(object):
         data = self._queryDB.cursor.fetchall()
         alreadyCommented = []
         for row in data:
-            o.refresh()
             # checks to make sure ID hasn't been commented already
             # For situtations where errors happened
             if row[0] not in alreadyCommented:
@@ -205,10 +204,6 @@ def _force_utf8(text):
 
 def main():
     while True:
-        try:
-            o.refresh()
-        except Exception as err:
-            print err         
         checkReply = Reply()
         checkReply.time_to_reply()
         checkReply.search_db()
