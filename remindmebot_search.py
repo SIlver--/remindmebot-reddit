@@ -89,13 +89,19 @@ class Search(object):
         self._replyMessage = ""
         self._replyDate = None
         self._privateMessage = False
+        
     def run(self, privateMessage=False):
-        if privateMessage == True:
-            self._privateMessage = True
+        self._privateMessage = privateMessage
         self.parse_comment()
         self.save_to_db()
         self.build_message()
         self.reply()
+        if self._privateMessage == True:
+            # Makes sure to marks as read, even if the above doesn't work
+            self.comment.mark_as_read()
+            self.find_bot_child_comment()
+        self._addToDB.connection.close()
+
     def parse_comment(self):
         """
         Parse comment looking for the message and time
@@ -133,6 +139,7 @@ class Search(object):
         tempString = tempString.replace('-', "/")
         # Remove RemindMe!
         self._storeTime = re.sub('(["].{0,9000}["])', '', tempString)[9:]
+    
     def save_to_db(self):
         """
         Saves the permalink comment, the time, and the message to the DB
@@ -154,7 +161,6 @@ class Search(object):
                         self._replyDate, 
                         self.comment.author))
         self._addToDB.connection.commit()
-        self._addToDB.connection.close()
         # Info is added to DB, user won't be bothered a second time
         self.commented.append(self.comment.id)
 
@@ -165,7 +171,7 @@ class Search(object):
         permalink = self.comment.permalink
         self._replyMessage +=(
             "I will be messaging you on [**{0} UTC**](http://www.wolframalpha.com/input/?i={0} UTC To Local Time)"
-            " to remind you of [**[this link].**]({commentPermalink})"
+            " to remind you of [**this link.**]({commentPermalink})"
             "{remindMeMessage}")
 
         try:
@@ -235,6 +241,40 @@ class Search(object):
         #else:
             #print self._replyMessage
 
+    def find_bot_child_comment(self):
+        """
+        Finds the remindmebot comment in the child
+        """
+        try:
+            # Grabbing all child comments
+            replies = reddit.get_submission(url=self.comment.permalink).comments[0].replies
+            # Look for bot's reply
+            commentfound = ""
+            if replies:
+                for comment in replies:
+                    if str(comment.author) == "RemindMeBot":
+                        commentfound = comment
+                self.comment_count(commentfound)
+        except Exception as err:
+            pass
+            
+    def comment_count(self, commentfound):
+        """
+        Posts edits the count if found
+        """
+        query = "SELECT count(permalink) FROM message_date WHERE permalink = %s"
+        self._addToDB.cursor.execute(query, [self.comment.permalink])
+        data = self._addToDB.cursor.fetchall()
+        # Grabs the tuple within the tuple, a number/the count
+        count = str(data[0][0])
+        comment = reddit.get_info(thing_id='t1_'+str(commentfound.id))
+        body = comment.body
+        # Adds the count to the post
+        body = re.sub(r'(\d+ OTHERS |)CLICK(ED|) THIS LINK', 
+            count + " OTHERS CLICKED THIS LINK", 
+            body)
+        comment.edit(body)
+
 def grab_list_of_reminders(username):
     """
     Grabs all the reminders of the user
@@ -298,22 +338,6 @@ def remove_all(username):
 
     return count
 
-def millionaire_makers_count():
-    """
-    Counts how many people are waiting
-    """
-    database = Connect()
-    query = "SELECT count(permalink) FROM message_date WHERE permalink = 'http://reddit.com/r/MillionaireMakers/about/sticky'"
-    database.cursor.execute(query)
-    data = database.cursor.fetchall()
-    deleteFlag = False
-    for row in data:
-        count = str(row[0])
-
-    message = "There are currently **" + count + "** users who are waiting to be reminded of the next /r/MillionaireMakers draw."
-
-    return message + Search.endMessage
-
 def read_pm():
     try:
         for message in reddit.get_unread(unset_has_mail=True, update_user=True):
@@ -356,9 +380,6 @@ def read_pm():
                 listOfReminders = grab_list_of_reminders(message.author.name)
                 message.reply("I have deleted all **" + count + "** reminders for you.\n\n" + listOfReminders)
                 message.mark_as_read()
-            #elif (("millionairecount!" in message.body.lower() or "!millionairecount" in message.body.lower()) and prawobject):
-            #    message.reply(millionaire_makers_count())
-            #    message.mark_as_read()
     except Exception as err:
         print traceback.format_exc()
 
