@@ -1,0 +1,14 @@
+CREATE TABLE `comment_list` (
+  `list` longtext,
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 
+
+CREATE TABLE `message_date` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `permalink` varchar(400) NOT NULL DEFAULT '',
+  `message` varchar(11000) DEFAULT NULL,
+  `new_date` datetime DEFAULT NULL,
+  `userID` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1
