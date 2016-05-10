@@ -146,7 +146,7 @@ class Search(object):
         """
 
         cal = pdt.Calendar()
-        holdTime = cal.parse(self._storeTime)
+        holdTime = cal.parse(self._storeTime, datetime.now(timezone('UTC')))
         if holdTime[1] == 0:
             # default time
             holdTime = cal.parse("1 day", datetime.now(timezone('UTC')))
