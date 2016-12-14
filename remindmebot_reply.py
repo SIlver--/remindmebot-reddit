@@ -58,6 +58,7 @@ class Reply(object):
             "\n\n**The message:** \n\n>{message}"
             "\n\n**The original comment:** \n\n>{original}"
             "\n\n**The parent comment from the original comment or its submission:** \n\n>{parent}"
+            "{origin_date_text}"
             "\n\n#Would you like to be reminded of the original comment again? Just set your time again after the RemindMe! command. [CLICK HERE]"
             "(http://np.reddit.com/message/compose/?to=RemindMeBot&subject=Reminder&message=[{original}]"
             "%0A%0ARemindMe!)"
@@ -115,8 +116,8 @@ class Reply(object):
             # For situtations where errors happened
             if row[0] not in alreadyCommented:
                 flagDelete = False
-                # MySQl- permalink, message, reddit user
-                flagDelete = self.new_reply(row[1],row[2], row[4])
+                # MySQl- permalink, message, origin date, reddit user
+                flagDelete = self.new_reply(row[1],row[2], row[4], row[5])
                 # removes row based on flagDelete
                 if flagDelete:
                     cmd = "DELETE FROM message_date WHERE id = %s" 
@@ -127,7 +128,7 @@ class Reply(object):
         self._queryDB.connection.commit()
         self._queryDB.connection.close()
 
-    def new_reply(self, permalink, message, author):
+    def new_reply(self, permalink, message, origin_date, author):
         """
         Replies a second time to the user after a set amount of time
         """ 
@@ -140,6 +141,12 @@ class Reply(object):
         print "---------------"
         print author
         print permalink        
+
+        if origin_date is not None:
+            origin_date_text = "\n\nYou requested this reminder on: [**" + _force_utf8(origin_date) + " UTC**](http://www.wolframalpha.com/input/?i=" + _force_utf8(origin_date) + " UTC To Local Time)"
+        else:  # Before feature was implemented, there are no origin dates stored.
+            origin_date_text = None
+
         try:
             reddit.send_message(
                 recipient=str(author), 
@@ -147,7 +154,8 @@ class Reply(object):
                 message=self._replyMessage.format(
                     message=_force_utf8(message),
                     original=_force_utf8(permalink),
-                    parent= self.parent_comment(permalink)
+                    parent= self.parent_comment(permalink),
+                    origin_date_text = origin_date_text
                 ))
             print "Did It"
             return True    
