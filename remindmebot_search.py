@@ -311,7 +311,7 @@ def grab_list_of_reminders(username):
         date = str(row[2])
         table += (
             "\n|" + row[0] + "|" +   row[1] + "|" + 
-            "[" + date  +"](http://www.wolframalpha.com/input/?i=" + str(row[2]) + ")|"
+            "[" + date  + " UTC](http://www.wolframalpha.com/input/?i=" + str(row[2]) + " UTC to local time)|"
             "[[X]](https://np.reddit.com/message/compose/?to=RemindMeBot&subject=Remove&message=Remove!%20"+ str(row[3]) + ")|"
             )
     if len(data) == 0: 
