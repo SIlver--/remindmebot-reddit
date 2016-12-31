@@ -89,6 +89,7 @@ class Search(object):
         self._storeTime = None
         self._replyMessage = ""
         self._replyDate = None
+        self._originDate = datetime.fromtimestamp(comment.created_utc)
         self._privateMessage = False
         
     def run(self, privateMessage=False):
@@ -159,11 +160,12 @@ class Search(object):
         # Converting time
         #9999/12/31 HH/MM/SS
         self._replyDate = time.strftime('%Y-%m-%d %H:%M:%S', holdTime[0])
-        cmd = "INSERT INTO message_date (permalink, message, new_date, userID) VALUES (%s, %s, %s, %s)"
+        cmd = "INSERT INTO message_date (permalink, message, new_date, origin_date, userID) VALUES (%s, %s, %s, %s, %s)"
         self._addToDB.cursor.execute(cmd, (
                         self.comment.permalink.encode('utf-8'), 
                         self._messageInput.encode('utf-8'), 
                         self._replyDate, 
+                        self._originDate,
                         self.comment.author))
         self._addToDB.connection.commit()
         # Info is added to DB, user won't be bothered a second time
@@ -309,7 +311,7 @@ def grab_list_of_reminders(username):
         date = str(row[2])
         table += (
             "\n|" + row[0] + "|" +   row[1] + "|" + 
-            "[" + date  +"](http://www.wolframalpha.com/input/?i=" + str(row[2]) + ")|"
+            "[" + date  + " UTC](http://www.wolframalpha.com/input/?i=" + str(row[2]) + " UTC to local time)|"
             "[[X]](https://np.reddit.com/message/compose/?to=RemindMeBot&subject=Remove&message=Remove!%20"+ str(row[3]) + ")|"
             )
     if len(data) == 0: 

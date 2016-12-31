@@ -9,6 +9,9 @@ CREATE TABLE `message_date` (
   `permalink` varchar(400) NOT NULL DEFAULT '',
   `message` varchar(11000) DEFAULT NULL,
   `new_date` datetime DEFAULT NULL,
+  `origin_date` datetime DEFAULT NULL,
   `userID` varchar(50) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1
+
+ALTER TABLE message_date ADD COLUMN `origin_date` datetime DEFAULT NULL AFTER new_date;
