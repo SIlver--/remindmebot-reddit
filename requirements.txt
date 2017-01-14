@@ -1,0 +1,1 @@
+Important, this libary only goes up to praw==3.6.0. As version 4+ changed how the library calls the API.

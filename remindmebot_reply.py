@@ -140,12 +140,14 @@ class Reply(object):
         """
         print "---------------"
         print author
-        print permalink        
+        print permalink
 
+        origin_date_text = ""
+        # Before feature was implemented, there are no origin dates stored
         if origin_date is not None:
-            origin_date_text = "\n\nYou requested this reminder on: [**" + _force_utf8(origin_date) + " UTC**](http://www.wolframalpha.com/input/?i=" + _force_utf8(origin_date) + " UTC To Local Time)"
-        else:  # Before feature was implemented, there are no origin dates stored.
-            origin_date_text = None
+            origin_date_text =  ("\n\nYou requested this reminder on: " 
+                                "[**" + _force_utf8(origin_date) + " UTC**](http://www.wolframalpha.com/input/?i="
+                                + _force_utf8(origin_date) + " UTC To Local Time)")
 
         try:
             reddit.send_message(

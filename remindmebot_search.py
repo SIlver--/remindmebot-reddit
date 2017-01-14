@@ -162,9 +162,9 @@ class Search(object):
         self._replyDate = time.strftime('%Y-%m-%d %H:%M:%S', holdTime[0])
         cmd = "INSERT INTO message_date (permalink, message, new_date, origin_date, userID) VALUES (%s, %s, %s, %s, %s)"
         self._addToDB.cursor.execute(cmd, (
-                        self.comment.permalink.encode('utf-8'), 
-                        self._messageInput.encode('utf-8'), 
-                        self._replyDate, 
+                        self.comment.permalink.encode('utf-8'),
+                        self._messageInput.encode('utf-8'),
+                        self._replyDate,
                         self._originDate,
                         self.comment.author))
         self._addToDB.connection.commit()
